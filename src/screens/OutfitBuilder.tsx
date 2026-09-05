@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { ItemPicker } from '../components/ItemPicker'
 import { EMPTY_OUTFIT_META, OutfitMeta, type OutfitMetaValues } from '../components/OutfitMeta'
 import { OutfitScoreHeader } from '../components/OutfitScoreHeader'
-import { SlotRow } from '../components/SlotRow'
+import { SlotList } from '../components/SlotList'
 import { Button, Empty, TopBar } from '../components/ui'
 import { allItems } from '../db/items'
 import { getOutfit, putOutfit } from '../db/outfits'
@@ -14,9 +14,7 @@ import { newId } from '../lib/id'
 import {
   clearSlot,
   emptySlots,
-  isSlotBlocked,
   setSlot,
-  SLOTS,
   SLOT_LABELS,
   slotItemIds,
   slotsFromItems,
@@ -26,7 +24,15 @@ import {
 import { navigate } from '../router'
 import type { Outfit, Verdict } from '../types'
 
-export function OutfitBuilder({ outfitId }: { outfitId?: string }) {
+export function OutfitBuilder({
+  outfitId,
+  presetItemIds,
+}: {
+  outfitId?: string
+  /** Comma-separated ids from a suggestion opened in the builder. A string,
+   * not an array, so the prefill effect does not re-run on every render. */
+  presetItemIds?: string
+}) {
   const [slots, setSlots] = useState<SlotState>(emptySlots)
   const [meta, setMeta] = useState<OutfitMetaValues>(EMPTY_OUTFIT_META)
   const [open, setOpen] = useState<Slot>()
@@ -40,17 +46,27 @@ export function OutfitBuilder({ outfitId }: { outfitId?: string }) {
   )
 
   useEffect(() => {
-    if (!existing || !items) return
-    const chosen = existing.itemIds
-      .map((id) => items.find((i) => i.id === id))
-      .filter((i) => i !== undefined)
-    setSlots(slotsFromItems(chosen))
-    setMeta({
-      occasions: existing.occasions,
-      rating: existing.rating,
-      notes: existing.notes ?? '',
-    })
-  }, [existing, items])
+    if (!items) return
+    if (existing) {
+      const chosen = existing.itemIds
+        .map((id) => items.find((i) => i.id === id))
+        .filter((item) => item !== undefined)
+      setSlots(slotsFromItems(chosen))
+      setMeta({
+        occasions: existing.occasions,
+        rating: existing.rating,
+        notes: existing.notes ?? '',
+      })
+      return
+    }
+    if (presetItemIds) {
+      const chosen = presetItemIds
+        .split(',')
+        .map((id) => items.find((i) => i.id === id))
+        .filter((item) => item !== undefined)
+      setSlots(slotsFromItems(chosen))
+    }
+  }, [existing, items, presetItemIds])
 
   const byId = new Map((items ?? []).map((item) => [item.id, item]))
   const chosenIds = slotItemIds(slots)
@@ -94,18 +110,12 @@ export function OutfitBuilder({ outfitId }: { outfitId?: string }) {
       <div className="space-y-5 px-4 py-4">
         <OutfitScoreHeader items={chosenItems} learning={learning} />
 
-        <div className="space-y-2">
-          {SLOTS.map((slot) => (
-            <SlotRow
-              key={slot}
-              slot={slot}
-              items={slots[slot].map((id) => byId.get(id)).filter((item) => item !== undefined)}
-              blocked={isSlotBlocked(slots, slot)}
-              onOpen={() => setOpen(slot)}
-              onClear={() => setSlots(clearSlot(slots, slot))}
-            />
-          ))}
-        </div>
+        <SlotList
+          slots={slots}
+          byId={byId}
+          onOpen={setOpen}
+          onClear={(slot) => setSlots(clearSlot(slots, slot))}
+        />
 
         <OutfitMeta values={meta} onChange={setMeta} />
 

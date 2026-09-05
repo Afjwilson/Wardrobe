@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { runQuickExport } from '../backup/exporter'
+import { fullBackupBlob, runFullBackup } from '../backup/zip'
 import { ImportPanel } from '../components/ImportPanel'
 import { Button, Empty, TopBar } from '../components/ui'
 import { allItems, setRetired } from '../db/items'
-import { getMeta } from '../db/meta'
+import { getMeta, markExported } from '../db/meta'
 import { useAsync } from '../hooks/useAsync'
+import { canSaveOverLastBackup, saveOverLastBackup } from '../lib/saveFile'
 import { formatBytes, storageStatus } from '../lib/storage'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -18,7 +20,9 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 export function Settings() {
   const [status, setStatus] = useState<string>()
+  const [busy, setBusy] = useState(false)
   const storage = useAsync(() => storageStatus(), [])
+  const canOverwrite = useAsync(() => canSaveOverLastBackup(), [])
   const lastExport = useAsync(() => getMeta<number>('lastExportAt'), [status])
   const retired = useAsync(async () => (await allItems(true)).filter((i) => i.retired), [status])
 
@@ -29,12 +33,50 @@ export function Settings() {
     )
   }
 
+  async function fullBackup() {
+    setBusy(true)
+    try {
+      const outcome = await runFullBackup()
+      setStatus(
+        outcome === 'cancelled' ? 'Backup cancelled.' : 'Full backup saved, photos included.',
+      )
+      canOverwrite.reload()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function overwrite() {
+    setBusy(true)
+    try {
+      const written = await saveOverLastBackup(await fullBackupBlob())
+      setStatus(
+        written
+          ? 'Wrote over the last backup file.'
+          : 'Could not reach that file — save a new backup instead.',
+      )
+      if (written) await markExported()
+    } finally {
+      setBusy(false)
+    }
+  }
+
   return (
     <>
       <TopBar title="Settings" />
       <div className="space-y-8 px-4 py-4">
         <Section title="Backup">
-          <Button onClick={() => void quickExport()}>Quick export (JSON, no photos)</Button>
+          <div className="grid gap-3">
+            <Button onClick={() => void quickExport()}>Quick export (JSON, no photos)</Button>
+            <Button variant="ghost" onClick={() => void fullBackup()} disabled={busy}>
+              {busy ? 'Zipping photos…' : 'Full backup (ZIP, with photos)'}
+            </Button>
+            {canOverwrite.value && (
+              <Button variant="ghost" onClick={() => void overwrite()} disabled={busy}>
+                Save over last backup
+              </Button>
+            )}
+          </div>
           <p className="text-muted text-xs">
             {lastExport.value
               ? `Last export ${new Date(lastExport.value).toLocaleDateString()}.`

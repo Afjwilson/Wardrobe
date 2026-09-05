@@ -37,10 +37,13 @@ async function readJsonFile(file: Blob): Promise<WardrobeExport> {
 export async function planImport(file: File): Promise<ImportPlan> {
   const name = file.name.toLowerCase()
   let payload: WardrobeExport
-  const photos = new Map<string, Blob>()
+  let photos = new Map<string, Blob>()
 
   if (name.endsWith('.zip')) {
-    throw new ImportError('Full ZIP backups are not supported by this build yet.')
+    const { readBackupZip } = await import('./zip')
+    const contents = await readBackupZip(file)
+    payload = contents.payload
+    photos = contents.photos
   } else if (name.endsWith('.json')) {
     payload = await readJsonFile(file)
   } else {

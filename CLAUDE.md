@@ -193,3 +193,42 @@ explanation strings, and a Vitest fixture set of twenty hand-labelled pairs.
   thresholds would test arithmetic rather than judgement. The suite asserts that
   no `bad` pair outranks any `good` one, plus exact deltas for each learned
   signal.
+
+---
+
+## Phase 5 — Suggest and full backup
+
+Shipped: the Suggest screen (greedy fill plus one swap pass), ZIP backup with
+photos, ZIP import, the export reminder banner, and the wear log.
+
+### Decisions and deviations
+
+- **Suggestion diversity comes from the opening move.** Eight outfits are built
+  by seeding each with a different one of the eight best candidates for the
+  first empty slot, then greedy-filling the rest and running one swap pass.
+  Identical results are deduplicated by item signature, so a small wardrobe
+  honestly returns fewer than eight rather than eight copies of one outfit.
+- **"Complete" means a one-piece or a top and bottom, plus shoes.** Outerwear
+  and accessories are not force-filled: a suggestion should not put a coat on
+  you in July because a slot was empty.
+- **A suggestion's reason is its weakest pair's reason**, which is the pair
+  driving the score down and the thing worth knowing before wearing it.
+- **The backup ZIP is `data.json` + `photos/<key>.webp` + `thumbs/<key>.webp`**,
+  as specified, with photos stored rather than base64'd into the JSON.
+  Compression level 6: the WebP payloads are already compressed, so the archive
+  is a container rather than a squeezer.
+- **The export reminder is a pure function** (`lib/reminder.ts`, unit-tested):
+  it fires only when data changed since the last export and 14 days have passed
+  since the later of the last export and the last dismissal. A device that has
+  never exported counts from `firstLaunchAt`, recorded on first launch.
+- **Verified end to end in a headless browser**: seed a wardrobe, take a full
+  backup, wipe, and restore from the ZIP with photos intact. Headless Chromium
+  exposes `showSaveFilePicker` but never resolves its dialog, so the browser
+  test pins itself to the anchor-download path; the picker path is what real
+  Chromium uses and is feature-detected at call time as the spec requires.
+
+### Where the spec's known limitations bite
+
+Extraction on the synthetic test fixtures reads a garment whose colour is close
+to its background as a blend of the two — exactly the "colour under artificial
+light" caveat in §9. The manual sampling step is the fix, and it is one tap.

@@ -21,6 +21,13 @@ export async function markDirty(): Promise<void> {
   await setMeta('dirtySinceExport', true)
 }
 
+/** The export reminder counts from here on a device that has never exported. */
+export async function recordFirstLaunch(): Promise<void> {
+  if ((await getMeta<number>('firstLaunchAt')) === undefined) {
+    await setMeta('firstLaunchAt', Date.now())
+  }
+}
+
 export async function markExported(at = Date.now()): Promise<void> {
   await setMeta('lastExportAt', at)
   await setMeta('dirtySinceExport', false)

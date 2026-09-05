@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { ExportReminder } from '../components/ExportReminder'
 import { ItemGrid } from '../components/ItemGrid'
 import { Chip, Empty, TopBar } from '../components/ui'
 import { allItems } from '../db/items'
@@ -23,8 +24,11 @@ export function Wardrobe() {
   return (
     <>
       <TopBar title="Wardrobe" />
+      <div className="pt-3">
+        <ExportReminder />
+      </div>
 
-      <div className="space-y-2 py-3">
+      <div className="space-y-2 pb-3">
         <div className="flex gap-2 overflow-x-auto px-3">
           <Chip active={!category} onClick={() => setCategory(null)}>
             all

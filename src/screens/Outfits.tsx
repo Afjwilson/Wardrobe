@@ -2,13 +2,13 @@ import { useState } from 'react'
 import { OutfitCard } from '../components/OutfitCard'
 import { Chip, Empty, TopBar } from '../components/ui'
 import { allItems } from '../db/items'
-import { allOutfits } from '../db/outfits'
+import { allOutfits, wearToday } from '../db/outfits'
 import { useAsync } from '../hooks/useAsync'
 import { navigate } from '../router'
 
 export function Outfits() {
   const [occasion, setOccasion] = useState<string | null>(null)
-  const { value, loading } = useAsync(
+  const { value, loading, reload } = useAsync(
     async () => ({ outfits: await allOutfits(), items: await allItems(true) }),
     [],
   )
@@ -50,6 +50,22 @@ export function Outfits() {
               key={outfit.id}
               outfit={outfit}
               items={outfit.itemIds.map((id) => byId.get(id)).filter((i) => i !== undefined)}
+              footer={
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await wearToday(outfit.id)
+                    reload()
+                  }}
+                  className="text-accent min-h-10 text-sm"
+                >
+                  Wear today
+                  {outfit.wornDates.length > 0 &&
+                    ` · last ${new Date(
+                      outfit.wornDates[outfit.wornDates.length - 1],
+                    ).toLocaleDateString()}`}
+                </button>
+              }
             />
           ))}
         </ul>
