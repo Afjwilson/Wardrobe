@@ -3,18 +3,21 @@ import { ItemGrid } from '../components/ItemGrid'
 import { Chip, Empty, TopBar } from '../components/ui'
 import { allItems } from '../db/items'
 import { useAsync } from '../hooks/useAsync'
+import { COLOUR_FAMILIES, family, type ColourFamily } from '../lib/colour'
 import { navigate } from '../router'
 import { CATEGORIES, SEASONS, type Category, type Season } from '../types'
 
 export function Wardrobe() {
   const [category, setCategory] = useState<Category | null>(null)
   const [season, setSeason] = useState<Season | null>(null)
+  const [colour, setColour] = useState<ColourFamily | null>(null)
   const { value: items, loading } = useAsync(() => allItems(), [])
 
   const visible = (items ?? []).filter(
     (item) =>
       (!category || item.category === category) &&
-      (!season || item.seasons.includes(season)),
+      (!season || item.seasons.includes(season)) &&
+      (!colour || item.colours.some((swatch) => family(swatch.hex) === colour)),
   )
 
   return (
@@ -39,6 +42,16 @@ export function Wardrobe() {
           {SEASONS.map((s) => (
             <Chip key={s} active={season === s} onClick={() => setSeason(s)}>
               {s}
+            </Chip>
+          ))}
+        </div>
+        <div className="flex gap-2 overflow-x-auto px-3">
+          <Chip active={!colour} onClick={() => setColour(null)}>
+            any colour
+          </Chip>
+          {COLOUR_FAMILIES.map((f) => (
+            <Chip key={f} active={colour === f} onClick={() => setColour(f)}>
+              {f}
             </Chip>
           ))}
         </div>

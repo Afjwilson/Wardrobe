@@ -110,3 +110,37 @@ outfits list filterable by occasion, "in N outfits" on item detail, and
   only for explicit ±40 verdicts, so nothing is double-counted.
 - **Saving requires at least two items**, since a single item is not a
   combination and produces no pairs.
+
+---
+
+## Phase 3 — Colour
+
+Shipped: automatic extraction (§4) feeding the swatch-confirm step, and a
+colour-family filter on the wardrobe grid.
+
+### Decisions and deviations
+
+- **Extraction lives in `lib/extract.ts` as a pure function** over a
+  `PixelGrid`, so it is unit-testable without a canvas. `lib/image.ts` owns the
+  canvas work (`pixelsForExtraction`, 120px long edge).
+- **k-means seeding is deterministic** — centroids start at four evenly spaced
+  points along the lightness-sorted samples, not at random. The same photo has
+  to produce the same suggestions twice, and a seeded RNG would be one more
+  thing to keep stable.
+- **Cluster colours are averaged in sRGB, not read back from the centroid.**
+  An OKLab centroid can land outside the sRGB gamut and clip to a colour no
+  pixel in the photo actually had; the mean of the member pixels cannot.
+- **Fallback when the foreground filter eats everything.** A garment that fills
+  the frame reads as its own background, so if the corner-distance cut leaves
+  fewer than 5% of pixels (or under 20), extraction falls back to the
+  lightness-filtered set. Returning no suggestions there would be worse than
+  returning the obvious one.
+- **Suggestions are prefilled, not presented as a separate "accept" step.** The
+  extracted swatches land straight in the phase 1 picker, where deselect,
+  promote-to-dominant, tap-to-sample and the hue/lightness nudge already exist.
+  This is the spec's "suggest, then confirm" with the confirm step being the
+  normal editor.
+- **The colour-family filter matches any swatch**, not just the dominant one,
+  so filtering for "blue" finds the shirt with a blue stripe.
+- Extraction is covered by `src/lib/extract.test.ts` (background rejection,
+  secondary colour, ΔE merging, full-frame fallback, empty input).

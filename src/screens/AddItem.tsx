@@ -5,8 +5,9 @@ import { PhotoCapture } from '../components/PhotoCapture'
 import { Button, TopBar } from '../components/ui'
 import { putBlob } from '../db/blobs'
 import { putItem } from '../db/items'
+import { extractSwatches } from '../lib/extract'
 import { newId } from '../lib/id'
-import type { ProcessedPhoto } from '../lib/image'
+import { pixelsForExtraction, type ProcessedPhoto } from '../lib/image'
 import { navigate } from '../router'
 import type { ColourSwatch, Item } from '../types'
 
@@ -18,6 +19,21 @@ export function AddItem() {
   const [colours, setColours] = useState<ColourSwatch[]>([])
   const [values, setValues] = useState<ItemFormValues>(EMPTY_ITEM_FORM)
   const [saving, setSaving] = useState(false)
+  const [extracting, setExtracting] = useState(false)
+
+  async function onPhoto(result: ProcessedPhoto) {
+    setPhoto(result)
+    setStep('colours')
+    setExtracting(true)
+    try {
+      setColours(extractSwatches(await pixelsForExtraction(result.photo)))
+    } catch {
+      // Extraction is a suggestion; manual sampling is always available.
+      setColours([])
+    } finally {
+      setExtracting(false)
+    }
+  }
 
   async function save() {
     if (!photo) return
@@ -55,17 +71,15 @@ export function AddItem() {
         onBack={() => (step === 'capture' ? navigate('/') : setStep('capture'))}
       />
 
-      {step === 'capture' && (
-        <PhotoCapture
-          onPhoto={(result) => {
-            setPhoto(result)
-            setStep('colours')
-          }}
-        />
-      )}
+      {step === 'capture' && <PhotoCapture onPhoto={(result) => void onPhoto(result)} />}
 
       {step === 'colours' && photo && (
         <div className="space-y-4 px-4 py-4">
+          <p className="text-muted text-sm">
+            {extracting
+              ? 'Reading colours…'
+              : 'Suggested from the photo. Adjust anything that looks wrong — the tap is faster than the maths.'}
+          </p>
           <ColourPicker
             imageUrl={photo.previewUrl}
             swatches={colours}
