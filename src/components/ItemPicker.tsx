@@ -1,18 +1,24 @@
+import { ScoreBadge } from './ScoreBadge'
 import { SwatchDots } from './Swatches'
 import { Thumb } from './Thumb'
 import type { Item } from '../types'
+
+export type PickerAnnotation = { score: number; reason: string }
 
 /** Full-screen sheet; no modal that needs a back gesture to escape. */
 export function ItemPicker({
   title,
   items,
   selectedIds,
+  annotations,
   onPick,
   onClose,
 }: {
   title: string
   items: Item[]
   selectedIds: string[]
+  /** Compatibility with the current selection; the caller has already sorted by it. */
+  annotations?: Map<string, PickerAnnotation>
   onPick: (item: Item) => void
   onClose: () => void
 }) {
@@ -33,6 +39,7 @@ export function ItemPicker({
         <ul className="divide-line flex-1 divide-y overflow-y-auto">
           {items.map((item) => {
             const selected = selectedIds.includes(item.id)
+            const annotation = annotations?.get(item.id)
             return (
               <li key={item.id}>
                 <button
@@ -51,11 +58,17 @@ export function ItemPicker({
                     <span className="block truncate text-sm capitalize">
                       {item.subcategory || item.category}
                     </span>
-                    <span className="text-muted block text-xs">
-                      formality {item.formality} · {item.pattern}
+                    <span className="text-muted block truncate text-xs">
+                      {annotation
+                        ? annotation.reason
+                        : `formality ${item.formality} · ${item.pattern}`}
                     </span>
                   </span>
-                  <SwatchDots colours={item.colours} />
+                  {annotation ? (
+                    <ScoreBadge score={annotation.score} />
+                  ) : (
+                    <SwatchDots colours={item.colours} />
+                  )}
                   {selected && <span className="text-accent">✓</span>}
                 </button>
               </li>

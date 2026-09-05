@@ -1,3 +1,4 @@
+import { GoesWith } from '../components/GoesWith'
 import { ItemOutfits } from '../components/ItemOutfits'
 import { SwatchBar } from '../components/Swatches'
 import { Thumb } from '../components/Thumb'
@@ -70,6 +71,7 @@ export function ItemDetail({ id }: { id: string }) {
           </p>
         )}
 
+        <GoesWith item={item} />
         <ItemOutfits itemId={item.id} />
 
         <div className="grid grid-cols-2 gap-3">

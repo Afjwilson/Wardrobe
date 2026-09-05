@@ -1,12 +1,15 @@
 import { useEffect, useState } from 'react'
 import { ItemPicker } from '../components/ItemPicker'
 import { EMPTY_OUTFIT_META, OutfitMeta, type OutfitMetaValues } from '../components/OutfitMeta'
+import { OutfitScoreHeader } from '../components/OutfitScoreHeader'
 import { SlotRow } from '../components/SlotRow'
 import { Button, Empty, TopBar } from '../components/ui'
 import { allItems } from '../db/items'
 import { getOutfit, putOutfit } from '../db/outfits'
 import { derivePairsFromOutfit } from '../db/pairs'
+import { rankAgainst } from '../engine'
 import { useAsync } from '../hooks/useAsync'
+import { useLearning } from '../hooks/useLearning'
 import { newId } from '../lib/id'
 import {
   clearSlot,
@@ -30,6 +33,7 @@ export function OutfitBuilder({ outfitId }: { outfitId?: string }) {
   const [saving, setSaving] = useState(false)
 
   const { value: items, loading } = useAsync(() => allItems(), [])
+  const { value: learning } = useLearning([])
   const { value: existing } = useAsync(
     async () => (outfitId ? await getOutfit(outfitId) : undefined),
     [outfitId],
@@ -50,6 +54,17 @@ export function OutfitBuilder({ outfitId }: { outfitId?: string }) {
 
   const byId = new Map((items ?? []).map((item) => [item.id, item]))
   const chosenIds = slotItemIds(slots)
+  const chosenItems = chosenIds.map((id) => byId.get(id)).filter((i) => i !== undefined)
+
+  // The picker for a slot is ranked against whatever is already in the outfit.
+  const ranked =
+    open && learning
+      ? rankAgainst(
+          chosenItems.filter((i) => !slots[open].includes(i.id)),
+          (items ?? []).filter((item) => item.category === open),
+          learning,
+        )
+      : undefined
 
   async function save(verdict: Verdict) {
     if (chosenIds.length < 2) return
@@ -77,12 +92,14 @@ export function OutfitBuilder({ outfitId }: { outfitId?: string }) {
       <TopBar title={existing ? 'Edit outfit' : 'Build outfit'} showBack />
 
       <div className="space-y-5 px-4 py-4">
+        <OutfitScoreHeader items={chosenItems} learning={learning} />
+
         <div className="space-y-2">
           {SLOTS.map((slot) => (
             <SlotRow
               key={slot}
               slot={slot}
-              items={slots[slot].map((id) => byId.get(id)).filter((i) => i !== undefined)}
+              items={slots[slot].map((id) => byId.get(id)).filter((item) => item !== undefined)}
               blocked={isSlotBlocked(slots, slot)}
               onOpen={() => setOpen(slot)}
               onClear={() => setSlots(clearSlot(slots, slot))}
@@ -108,8 +125,16 @@ export function OutfitBuilder({ outfitId }: { outfitId?: string }) {
       {open && (
         <ItemPicker
           title={SLOT_LABELS[open]}
-          items={(items ?? []).filter((item) => item.category === open)}
+          items={
+            ranked?.map((entry) => entry.item) ??
+            (items ?? []).filter((item) => item.category === open)
+          }
           selectedIds={slots[open]}
+          annotations={
+            chosenItems.length > 0 && ranked
+              ? new Map(ranked.map((e) => [e.item.id, { score: e.score, reason: e.reason }]))
+              : undefined
+          }
           onPick={(item) => setSlots(setSlot(slots, open, item.id))}
           onClose={() => setOpen(undefined)}
         />

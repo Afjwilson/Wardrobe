@@ -144,3 +144,52 @@ colour-family filter on the wardrobe grid.
   so filtering for "blue" finds the shirt with a blue stripe.
 - Extraction is covered by `src/lib/extract.test.ts` (background rejection,
   secondary colour, ΔE merging, full-frame fallback, empty input).
+
+---
+
+## Phase 4 — Engine
+
+Shipped: pair scoring in `src/engine/` as pure functions, "Goes with" on item
+detail, live outfit score in the builder, compatibility-sorted slot pickers,
+explanation strings, and a Vitest fixture set of twenty hand-labelled pairs.
+
+### Decisions and deviations
+
+- **"Overrides everything" is scoped to the learned term.** An explicit
+  `PairVerdict` short-circuits the other learned signals (outfit counts,
+  colour-family precedent) and contributes ±40, but it does not bypass the rest
+  of the formula — the spec presents those bullets as alternatives *within*
+  `learned`, and the final score is capped to 0–100 as specified.
+- **The learned term is never gated on the cold-start thresholds.** §9 says the
+  term "is inactive" under ~20 items and ~10 rated outfits; that is a
+  description of having no data, not an instruction to ignore verdicts the user
+  did record. Suppressing a verdict because the wardrobe has 19 items would be
+  wrong. `Learning.coldStart` is computed and surfaced in the UI ("Early days…")
+  exactly as §9 asks — say so rather than pretending.
+- **Outfit counts come from the outfits, explicit verdicts from the pairs
+  store.** The derived `PairVerdict` records written in phase 2 are a lookup
+  cache; counting them as well would double-weight the same evidence.
+- **Harmony rules are evaluated in a fixed precedence** because the spec's table
+  overlaps: both-neutral, then either-neutral, then hue < 25° (splitting tonal
+  from analogous on ΔL > 0.25), then 150–180° complementary, then the 25–70°
+  clash zone, then 100–140° triadic. Hue gaps of 70–100° and 140–150° score 0.
+- **`valueContrast` above 0.55 ΔL scores 0**, not +15: the spec's band stops at
+  0.55 and says nothing beyond it, so white-on-black gets no bonus and no
+  penalty.
+- **`seasonFit` is unspecified beyond its range**: shared season +5, both
+  tagged but disjoint −10, either untagged 0.
+- **Colour names for explanations** come from `lib/colourName.ts`, a 28-entry
+  wardrobe vocabulary matched by CIELAB ΔE, so a reason reads "navy + rust"
+  the way the spec's example does.
+- **"Goes with" excludes items of the same category.** Ranking a shirt against
+  other shirts fills the list with things you cannot wear together. Layering two
+  tops is possible, but the outfit builder covers that case.
+- **Explicit verdicts are settable from the "Goes with" list** (✓ / ✕, tap again
+  to clear). Nothing else in the app creates `source: 'explicit'` records, and
+  the strongest term in the engine needs a way in.
+- **Test bands are loose and overlapping; the ordering assertion is the real
+  test.** The spec's weights put a wrong-formality pair with pleasant colour in
+  the mid-40s and an all-neutral high-contrast pair in the mid-50s, so tight
+  thresholds would test arithmetic rather than judgement. The suite asserts that
+  no `bad` pair outranks any `good` one, plus exact deltas for each learned
+  signal.
