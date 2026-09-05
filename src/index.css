@@ -1,0 +1,50 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-ink: #0b0b0e;
+  --color-surface: #16161c;
+  --color-surface-2: #1f1f27;
+  --color-line: #2c2c36;
+  --color-text: #f2f2f5;
+  --color-muted: #9a9aa8;
+  --color-accent: #c8a26a;
+  --color-good: #4ade80;
+  --color-bad: #f87171;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-text);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+
+/* Bottom nav sits above the home indicator on iOS. */
+.safe-bottom {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+.safe-top {
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+}
+
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+/* 16px minimum stops iOS Safari zooming the viewport on focus. */
+input[type='text'],
+input[type='search'],
+textarea,
+select {
+  font-size: 16px;
+}
