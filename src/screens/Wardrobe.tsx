@@ -6,19 +6,36 @@ import { allItems } from '../db/items'
 import { useAsync } from '../hooks/useAsync'
 import { COLOUR_FAMILIES, family, type ColourFamily } from '../lib/colour'
 import { navigate } from '../router'
-import { CATEGORIES, SEASONS, type Category, type Season } from '../types'
+import {
+  CATEGORIES,
+  SEASONS,
+  type Category,
+  type Scale5,
+  type Season,
+} from '../types'
+
+/** The 1–5 scale from the data model, named so the chips mean something. */
+const FORMALITY_CHIPS: [Scale5, string][] = [
+  [1, 'gym'],
+  [2, 'casual'],
+  [3, 'smart casual'],
+  [4, 'smart'],
+  [5, 'formal'],
+]
 
 export function Wardrobe() {
   const [category, setCategory] = useState<Category | null>(null)
   const [season, setSeason] = useState<Season | null>(null)
   const [colour, setColour] = useState<ColourFamily | null>(null)
+  const [formality, setFormality] = useState<Scale5 | null>(null)
   const { value: items, loading } = useAsync(() => allItems(), [])
 
   const visible = (items ?? []).filter(
     (item) =>
       (!category || item.category === category) &&
       (!season || item.seasons.includes(season)) &&
-      (!colour || item.colours.some((swatch) => family(swatch.hex) === colour)),
+      (!colour || item.colours.some((swatch) => family(swatch.hex) === colour)) &&
+      (!formality || item.formality === formality),
   )
 
   return (
@@ -56,6 +73,20 @@ export function Wardrobe() {
           {COLOUR_FAMILIES.map((f) => (
             <Chip key={f} active={colour === f} onClick={() => setColour(f)}>
               {f}
+            </Chip>
+          ))}
+        </div>
+        <div className="flex gap-2 overflow-x-auto px-3">
+          <Chip active={!formality} onClick={() => setFormality(null)}>
+            any formality
+          </Chip>
+          {FORMALITY_CHIPS.map(([value, label]) => (
+            <Chip
+              key={value}
+              active={formality === value}
+              onClick={() => setFormality(value)}
+            >
+              {label}
             </Chip>
           ))}
         </div>
