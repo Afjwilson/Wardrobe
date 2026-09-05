@@ -2,6 +2,7 @@ import { navigate } from '../router'
 
 const TABS = [
   { path: '/', label: 'Wardrobe', glyph: '▦' },
+  { path: '/outfits', label: 'Outfits', glyph: '❏' },
   { path: '/settings', label: 'Settings', glyph: '⚙' },
 ] as const
 

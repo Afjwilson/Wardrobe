@@ -1,8 +1,9 @@
+import { ItemOutfits } from '../components/ItemOutfits'
 import { SwatchBar } from '../components/Swatches'
 import { Thumb } from '../components/Thumb'
 import { Button, Empty, TopBar } from '../components/ui'
 import { deleteBlob, forgetBlobUrl } from '../db/blobs'
-import { deleteItem, getItem, setRetired } from '../db/items'
+import { deleteItemCascade, getItem, setRetired } from '../db/items'
 import { useAsync } from '../hooks/useAsync'
 import { navigate } from '../router'
 import type { Item } from '../types'
@@ -32,11 +33,17 @@ export function ItemDetail({ id }: { id: string }) {
 
   async function remove() {
     if (!item) return
-    if (!window.confirm('Delete this item and its photo? This cannot be undone.')) return
+    if (
+      !window.confirm(
+        'Delete this item, its photo, and its place in any outfit? This cannot be undone.',
+      )
+    ) {
+      return
+    }
     await Promise.all([deleteBlob(item.photoKey), deleteBlob(item.thumbKey)])
     forgetBlobUrl(item.photoKey)
     forgetBlobUrl(item.thumbKey)
-    await deleteItem(item.id)
+    await deleteItemCascade(item.id)
     navigate('/', { replace: true })
   }
 
@@ -62,6 +69,8 @@ export function ItemDetail({ id }: { id: string }) {
             Retired — hidden from the wardrobe grid and from suggestions.
           </p>
         )}
+
+        <ItemOutfits itemId={item.id} />
 
         <div className="grid grid-cols-2 gap-3">
           <Button

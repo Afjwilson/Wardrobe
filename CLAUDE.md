@@ -79,3 +79,34 @@ helper.
 
 Colour extraction is manual only (tap-to-sample plus a hue/lightness nudge);
 automatic extraction is phase 3. No outfits, no scoring, no suggestions.
+
+---
+
+## Phase 2 — Outfits
+
+Shipped: slot-based outfit builder (no scoring yet), save with a
+`works` / `no` verdict plus optional rating, occasion tags and notes, the
+outfits list filterable by occasion, "in N outfits" on item detail, and
+`PairVerdict` records derived from every saved outfit.
+
+### Decisions and deviations
+
+- **Slots map one-to-one onto categories** (`lib/slots.ts`), so the picker for
+  a slot is just that category. `accessory` is the only slot holding more than
+  one item.
+- **A one-piece closes the top and bottom slots** and vice versa. The spec's
+  slot list does not mention the `full` category; blocking is the smallest
+  thing that keeps both consistent without inventing rules.
+- **Derived pairs never overwrite explicit ones.** `derivePairsFromOutfit`
+  skips any pair whose stored record has `source: 'explicit'`, so a verdict the
+  user set by hand survives saving an outfit that contradicts it.
+- **Deleting an item cascades** (`deleteItemCascade`): its pair verdicts go,
+  it is removed from every outfit, and an outfit left with fewer than two items
+  is deleted rather than left as a one-item "combination". The spec does not
+  say what happens to referencing records; leaving dangling ids would poison the
+  learned term in phase 4.
+- **The outfit-derived pair store is a cache, not the scoring input.** Phase 4
+  reads outfit counts directly for the ±25 terms, and uses the `pairs` store
+  only for explicit ±40 verdicts, so nothing is double-counted.
+- **Saving requires at least two items**, since a single item is not a
+  combination and produces no pairs.

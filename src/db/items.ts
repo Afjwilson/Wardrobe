@@ -1,5 +1,7 @@
 import type { Category, Item } from '../types'
 import { markDirty } from './meta'
+import { deleteOutfit, outfitsWithItem, putOutfit } from './outfits'
+import { clearPair, pairsForItem } from './pairs'
 import { fromRow, getDB, toRow } from './schema'
 
 export async function getItem(id: string): Promise<Item | undefined> {
@@ -50,4 +52,21 @@ export async function setRetired(id: string, retired: boolean): Promise<void> {
 export async function deleteItem(id: string): Promise<void> {
   await (await getDB()).delete('items', id)
   await markDirty()
+}
+
+/**
+ * Deleting an item also drops the records that referenced it: its pair
+ * verdicts, and its place in any outfit. An outfit left with fewer than two
+ * items is no longer a combination, so it goes too.
+ */
+export async function deleteItemCascade(id: string): Promise<void> {
+  for (const pair of await pairsForItem(id)) {
+    await clearPair(pair.a, pair.b)
+  }
+  for (const outfit of await outfitsWithItem(id)) {
+    const itemIds = outfit.itemIds.filter((itemId) => itemId !== id)
+    if (itemIds.length < 2) await deleteOutfit(outfit.id)
+    else await putOutfit({ ...outfit, itemIds })
+  }
+  await deleteItem(id)
 }
