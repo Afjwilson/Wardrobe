@@ -1,0 +1,44 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+      - claude/holiday-booking-tracker-3sa1rx
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No build step: the app is plain HTML, CSS and JS, and every path in it
+      # is relative, so it runs unchanged from /<repo>/ on Pages.
+      - name: Stage the site
+        run: |
+          mkdir -p dist
+          cp -r index.html manifest.webmanifest sw.js css js icons dist/
+          touch dist/.nojekyll
+
+      # Publishing to a gh-pages branch avoids the Pages admin API, which the
+      # workflow token isn't allowed to call. GitHub serves the branch
+      # automatically at https://<owner>.github.io/<repo>/.
+      - name: Push dist to gh-pages
+        run: |
+          cd dist
+          git init -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Deploy ${GITHUB_SHA}"
+          git push --force \
+            "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" \
+            gh-pages

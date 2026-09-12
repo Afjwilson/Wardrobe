@@ -8,15 +8,22 @@ No accounts, no server, no build step. Everything is stored on the device.
 
 ---
 
-## Running it
+## Where it lives
+
+**https://afjwilson.github.io/Wardrobe/**
+
+Pushing to this branch runs `.github/workflows/deploy.yml`, which copies the
+site into a `gh-pages` branch that GitHub serves. There is no build step — the
+app is plain HTML, CSS and JavaScript, and every path in it is relative, so it
+runs unchanged from a `/Wardrobe/` subpath.
+
+If the URL 404s after the first deploy, Pages has not been pointed at the
+branch yet: Settings → Pages → *Deploy from a branch* → `gh-pages` / `/ (root)`.
+That is a one-off.
+
+## Running it locally
 
 It is a static site, so anything that serves files will do.
-
-**On GitHub Pages:** Settings → Pages → *Deploy from a branch*, pick this branch
-and the `/ (root)` folder. The app appears at
-`https://<user>.github.io/<repo>/`.
-
-**Locally:**
 
 ```sh
 python3 -m http.server 8000
@@ -112,6 +119,7 @@ two taps.
 ## Layout
 
 ```
+.github/workflows/      publishes the site to the gh-pages branch
 index.html              markup and the app shell
 manifest.webmanifest    install metadata
 sw.js                   offline cache (bump CACHE when files change)
