@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Holiday Tracker</title>
+<meta name="description" content="Track what is booked and what is paid for across multiple holidays.">
+<meta name="theme-color" content="#0f766e" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b1220" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Holidays">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" sizes="192x192">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<header class="topbar">
+  <button id="btn-trip" class="trip-btn" type="button">
+    <span class="trip-btn__name" id="trip-name">Holidays</span>
+    <span class="trip-btn__meta" id="trip-meta">Tap to switch trip</span>
+  </button>
+  <button id="btn-settings" class="icon-btn" type="button" aria-label="Settings and backup">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7Z"/><path d="M19.4 13a7.6 7.6 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-1.7-1L14.9 3h-4l-.4 2.6a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.4L4.6 11a7.6 7.6 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.8 1.7 1l.4 2.6h4l.4-2.6c.6-.2 1.2-.6 1.7-1l2.4 1 2-3.4Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+  </button>
+</header>
+
+<main id="main">
+  <div id="empty" class="empty" hidden>
+    <div class="empty__icon">&#9992;&#65039;</div>
+    <h1>No trips yet</h1>
+    <p>Add a holiday, then build up the list of what needs booking and paying.</p>
+    <button class="btn btn--primary" id="btn-first-trip" type="button">Add your first trip</button>
+  </div>
+
+  <div id="trip-view" hidden>
+    <section class="summary card" id="summary"></section>
+    <section class="attention" id="attention"></section>
+
+    <div class="toolbar">
+      <label class="search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m16 16 4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <input type="search" id="search" placeholder="Search bookings, refs, notes" autocomplete="off">
+      </label>
+      <div class="chips" id="filters" role="tablist"></div>
+    </div>
+
+    <div id="list" class="list"></div>
+  </div>
+</main>
+
+<div class="actionbar">
+  <button class="btn btn--ghost" id="btn-checklist" type="button">
+    <span aria-hidden="true">&#9745;</span> Checklist
+  </button>
+  <button class="btn btn--primary" id="btn-add" type="button">
+    <span aria-hidden="true">+</span> Add booking
+  </button>
+</div>
+
+<div id="scrim" class="scrim" hidden></div>
+<div id="sheets" class="sheets"></div>
+<div id="toast" class="toast" hidden></div>
+
+<script src="js/catalog.js"></script>
+<script src="js/store.js"></script>
+<script src="js/seed.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
