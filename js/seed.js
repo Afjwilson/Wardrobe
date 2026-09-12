@@ -150,10 +150,12 @@
             provider: 'Booked direct',
             booked: true,
             startDate: '2026-12-17',
+            startTime: '06:30',
             endDate: '2026-12-24',
+            endTime: '19:00',
             total: 66.40,
             payments: [],
-            notes: 'Drop off 06:30 on the 17th, collect 19:00 on the 24th.'
+            notes: 'Booked direct with the airport.'
           }
         ]
       },

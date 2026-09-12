@@ -114,6 +114,20 @@
     return fmtShort(a) + ' – ' + fmtShort(b);
   }
 
+  /* Date range with optional clock times: "16 Nov 06:30 \u2013 20 Nov 18:00".
+     Falls back to the compact date-only range when no times are recorded, so
+     bookings saved before times existed read exactly as they did. */
+  function fmtWhen(startDate, endDate, startTime, endTime) {
+    if (!startDate && !endDate) return '';
+    if (!startTime && !endTime) return fmtRange(startDate, endDate);
+
+    var from = fmtShort(startDate) + (startTime ? ' ' + startTime : '');
+    if (!endDate || endDate === startDate) {
+      return endTime ? from + ' \u2013 ' + endTime : from;
+    }
+    return from + ' \u2013 ' + fmtShort(endDate) + (endTime ? ' ' + endTime : '');
+  }
+
   function nights(a, b) {
     var da = parseD(a), db = parseD(b);
     if (!da || !db) return 0;
@@ -301,7 +315,7 @@
 
     var sub = [];
     if (item.provider) sub.push(item.provider);
-    var range = fmtRange(item.startDate, item.endDate);
+    var range = fmtWhen(item.startDate, item.endDate, item.startTime, item.endTime);
     if (range) sub.push(range);
     if (item.payWith) sub.push(item.payWith);
     if (item.ref) sub.push(item.ref);
@@ -825,6 +839,8 @@
       var urlIn = h('input', { type: 'url', value: draft.url || '', placeholder: 'https://' });
       var startIn = dateInput(draft.startDate);
       var endIn = dateInput(draft.endDate);
+      var startTimeIn = h('input', { type: 'time', value: draft.startTime || '' });
+      var endTimeIn = h('input', { type: 'time', value: draft.endTime || '' });
       var bookByIn = dateInput(draft.bookBy);
       var cancelByIn = dateInput(draft.cancelBy);
       var totalIn = numInput(draft.total, '0.00');
@@ -847,6 +863,8 @@
         draft.url = urlIn.value.trim();
         draft.startDate = startIn.value;
         draft.endDate = endIn.value;
+        draft.startTime = startTimeIn.value;
+        draft.endTime = endTimeIn.value;
         draft.bookBy = bookByIn.value;
         draft.cancelBy = cancelByIn.value;
         draft.total = totalIn.value === '' ? null : Number(totalIn.value);
@@ -873,8 +891,17 @@
       body.appendChild(h('div', { class: 'section-title', text: 'Dates' }));
       body.appendChild(h('div', { class: 'grid' }, [
         field('From', startIn),
-        field('To', endIn)
+        field('Time', startTimeIn)
       ]));
+      body.appendChild(h('div', { class: 'grid' }, [
+        field('To', endIn),
+        field('Time', endTimeIn)
+      ]));
+      body.appendChild(h('div', {
+        class: 'field__hint',
+        style: 'margin-top:-4px',
+        text: 'Times are optional \u2014 worth filling in for parking, transfers and car hire.'
+      }));
       body.appendChild(h('div', { class: 'grid' }, [
         field('Book by', bookByIn),
         field('Free cancellation until', cancelByIn)

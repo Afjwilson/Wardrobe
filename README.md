@@ -51,9 +51,10 @@ nearer trip has even been paid for, so it defaults to showing all trips at once.
 
 **Each booking** records who it was booked through, the reference, the dates,
 what it cost, which card paid for it, a free-cancellation deadline, and any
-number of scheduled payments with their own due dates. Flights, trains and
-transfers also take any number of legs, each with a flight number, airports,
-times and an arrives-next-day flag.
+number of scheduled payments with their own due dates. Dates can carry clock
+times as well, so airport parking reads "16 Nov 06:30 - 20 Nov 18:00" rather
+than just the days. Flights, trains and transfers also take any number of legs,
+each with a flight number, airports, times and an arrives-next-day flag.
 
 Prices can be held in two currencies at once — the local price (€607) alongside
 what it actually costs you (£519). Only the home-currency figure feeds the

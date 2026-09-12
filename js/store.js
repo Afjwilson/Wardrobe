@@ -126,6 +126,8 @@
       t.items.forEach(function (it) {
         it.payments = it.payments || [];
         it.legs = it.legs || [];
+        if (it.startTime == null) it.startTime = '';
+        if (it.endTime == null) it.endTime = '';
       });
     });
     return s;
@@ -317,7 +319,9 @@
         url: data.url || '',
         booked: !!data.booked,
         startDate: data.startDate || '',
+        startTime: data.startTime || '',
         endDate: data.endDate || '',
+        endTime: data.endTime || '',
         bookBy: data.bookBy || '',
         cancelBy: data.cancelBy || '',
         payWith: data.payWith || '',
