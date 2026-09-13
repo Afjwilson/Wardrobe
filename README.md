@@ -72,6 +72,42 @@ list goes in through **Add booking**.
 
 ---
 
+## Reminders
+
+Settings -> Notifications turns on reminders for payment due dates, book-by
+dates and closing cancellation windows. Lead times are global and default to
+**7 days and 1 day** before, choosable from 30/14/7/3/1/on-the-day, at an hour
+you pick. Any booking can be muted from its editor, and any single instalment
+from its payment screen; muted things keep their dates and simply stop
+notifying.
+
+**What actually fires, and when it does not.** With no server behind it, a PWA
+has three possible mechanisms and Android grants different ones to different
+devices, so all three are feature-detected and the Settings screen reports
+which one this device got:
+
+1. **Notification Triggers** - the system holds an exact timestamp and fires it
+   whether or not the app is running. Best case, but not shipped in most Chrome
+   builds.
+2. **Periodic Background Sync** - the browser wakes the service worker roughly
+   daily and anything now due is raised then. Granted only to installed apps
+   that Chrome considers well used, so reminders can land hours after the hour
+   you set.
+3. **Neither** - reminders can only appear while the app is open.
+
+The two test buttons exist because of that spread. "Send a test notification
+now" proves permission and display. "Schedule a test for 60 seconds' time" goes
+through the same scheduling call a real reminder uses, so if it arrives with
+the app closed, real reminders will too - and if it refuses, this device does
+not have exact scheduling. A worker diagnostic below them reports what the
+service worker itself can see.
+
+Reminder-building lives in `js/reminders.js`, loaded by the page with a script
+tag and by `sw.js` with `importScripts`, so the background check and the
+foreground schedule are computed by the same code.
+
+---
+
 ## Your data, and not losing it
 
 Bookings are written to `localStorage` and mirrored into IndexedDB, the app
@@ -129,6 +165,8 @@ sw.js                   offline cache (bump CACHE when files change)
 css/styles.css          all styling, light and dark
 js/catalog.js           categories, the forgotten-things library, starter packs
 js/store.js             state, totals, persistence, export and import
+js/reminders.js         reminder logic, shared with the service worker
+js/notify.js            permissions, scheduling, capability detection, tests
 js/seed.js              the four trips from the notepad
 js/app.js               rendering and every sheet
 icons/                  generated PNG icons

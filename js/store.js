@@ -36,7 +36,8 @@
         theme: 'auto',
         group: 'category',
         lastExport: null,
-        seeded: false
+        seeded: false,
+        notifications: { enabled: false, leadDays: [7, 1], hour: 9 }
       }
     };
   }
@@ -121,6 +122,9 @@
     if (!s.trips) return null;
     s.schema = s.schema || SCHEMA;
     s.settings = s.settings || emptyState().settings;
+    if (!s.settings.notifications) {
+      s.settings.notifications = emptyState().settings.notifications;
+    }
     s.trips.forEach(function (t) {
       t.items = t.items || [];
       t.items.forEach(function (it) {
@@ -128,6 +132,10 @@
         it.legs = it.legs || [];
         if (it.startTime == null) it.startTime = '';
         if (it.endTime == null) it.endTime = '';
+        if (it.muted == null) it.muted = false;
+        it.payments.forEach(function (p) {
+          if (p.muted == null) p.muted = false;
+        });
       });
     });
     return s;
@@ -318,6 +326,7 @@
         ref: data.ref || '',
         url: data.url || '',
         booked: !!data.booked,
+        muted: !!data.muted,
         startDate: data.startDate || '',
         startTime: data.startTime || '',
         endDate: data.endDate || '',

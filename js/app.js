@@ -885,6 +885,16 @@
               redraw();
             }
           }, [isPaid ? '✓ Paid ' + (p.paidOn === 'paid' ? '' : fmtShort(p.paidOn)) : 'Mark paid']),
+          isPaid ? null : h('button', {
+            class: 'paychip' + (p.muted ? '' : ' paychip--on'), type: 'button',
+            'aria-label': p.muted ? 'Unmute reminders' : 'Mute reminders',
+            onclick: function () {
+              commit();
+              p.muted = !p.muted;
+              Store.save();
+              redraw();
+            }
+          }, [p.muted ? '\uD83D\uDD15' : '\uD83D\uDD14']),
           h('button', {
             class: 'mini__del', type: 'button', 'aria-label': 'Delete payment',
             onclick: function () {
@@ -1016,6 +1026,8 @@
       var includedSw = switchRow('Cost is included in another booking', draft.included,
         'Use this for flights or meals that came inside a package');
       var notesIn = h('textarea', { placeholder: 'Anything worth remembering' }, [draft.notes || '']);
+      var mutedSw = switchRow('Mute reminders for this booking', !!draft.muted,
+        'Its dates stay on the list, it just stops notifying');
 
       function harvest() {
         draft.title = titleIn.value.trim() || 'Untitled';
@@ -1035,6 +1047,7 @@
         draft.localCurrency = localCurIn.value;
         draft.localAmount = localAmtIn.value === '' ? null : Number(localAmtIn.value);
         draft.included = includedSw.input.checked;
+        draft.muted = mutedSw.input.checked;
         draft.notes = notesIn.value;
       }
       entry.harvest = harvest;
@@ -1235,6 +1248,9 @@
           }
         }, ['+ Add a leg']));
       }
+
+      body.appendChild(h('div', { class: 'section-title', text: 'Reminders' }));
+      body.appendChild(mutedSw);
 
       body.appendChild(h('div', { class: 'section-title', text: 'Notes' }));
       body.appendChild(field(null, notesIn));
@@ -1607,6 +1623,203 @@
     input.click();
   }
 
+  // --------------------------------------------------------- notifications
+  function notificationsSheet() {
+    var entry = openSheet({
+      title: 'Reminders',
+      footer: [h('button', { class: 'btn btn--primary', type: 'button', onclick: closeSheet }, ['Done'])],
+      render: function (body, self) { entry = self; draw(body); }
+    });
+
+    function redraw() { refreshSheet(entry, draw); }
+
+    function draw(body) {
+      var cfg = Reminders.config(Store.get());
+
+      if (!Notify.supported()) {
+        body.appendChild(h('div', { class: 'callout callout--warn' }, [
+          h('strong', { text: 'Not available in this browser' }),
+          'Notifications need a browser with service worker support. On Android, ' +
+          'Chrome installed to the home screen is the one to use.'
+        ]));
+        return;
+      }
+
+      var onSw = switchRow('Remind me about deadlines', cfg.enabled,
+        'Payments due, things still to book, and cancellation windows closing');
+      onSw.input.addEventListener('change', function () {
+        var want = onSw.input.checked;
+        if (want && Notify.permission() !== 'granted') {
+          Notify.request().then(function (result) {
+            setEnabled(result === 'granted');
+            if (result !== 'granted') {
+              App.toast('Android did not allow notifications for this app', 'warn');
+            }
+            redraw();
+          });
+          return;
+        }
+        setEnabled(want);
+        redraw();
+      });
+      body.appendChild(onSw);
+
+      // ---- what this device will actually manage
+      var statusBox = h('div', { class: 'callout callout--info', text: 'Checking this device\u2026' });
+      body.appendChild(statusBox);
+      Notify.status().then(function (st) {
+        statusBox.className = 'callout callout--' +
+          ((st.permission !== 'granted' || st.quality === 'poor') ? 'warn' : 'info');
+        statusBox.innerHTML = '';
+        statusBox.appendChild(h('strong', {
+          text: st.permission === 'granted'
+            ? (st.enabled ? 'Reminders are on' : 'Allowed, but switched off')
+            : 'Not allowed yet'
+        }));
+        statusBox.appendChild(document.createTextNode(st.summary));
+        if (st.enabled && st.permission === 'granted') {
+          statusBox.appendChild(h('div', {
+            style: 'margin-top:6px',
+            text: st.pending + ' reminder' + (st.pending === 1 ? '' : 's') + ' queued.'
+          }));
+        }
+      });
+
+      body.appendChild(h('div', { class: 'section-title', text: 'How far ahead' }));
+      body.appendChild(h('div', { class: 'chips', style: 'margin:0 0 6px' },
+        [30, 14, 7, 3, 1, 0].map(function (days) {
+          var on = cfg.leadDays.indexOf(days) !== -1;
+          return h('button', {
+            class: 'chip', type: 'button', 'aria-selected': String(on),
+            onclick: function () {
+              var next = cfg.leadDays.slice();
+              var at = next.indexOf(days);
+              if (at === -1) next.push(days); else next.splice(at, 1);
+              if (!next.length) {
+                App.toast('Keep at least one reminder time', 'warn');
+                return;
+              }
+              patch({ leadDays: next });
+              redraw();
+            }
+          }, [days === 0 ? 'On the day' : days + ' day' + (days === 1 ? '' : 's')]);
+        })));
+      body.appendChild(h('div', {
+        class: 'field__hint',
+        text: 'A deadline can raise more than one reminder \u2014 7 days and 1 day is the default.'
+      }));
+
+      var hourIn = h('input', { type: 'time', value: String(cfg.hour).padStart(2, '0') + ':00' });
+      hourIn.addEventListener('change', function () {
+        var hour = Number((hourIn.value || '09:00').split(':')[0]);
+        patch({ hour: isNaN(hour) ? 9 : hour });
+        redraw();
+      });
+      body.appendChild(h('div', { class: 'section-title', text: 'What time of day' }));
+      body.appendChild(field(null, hourIn, 'Minutes are ignored \u2014 reminders land on the hour.'));
+
+      body.appendChild(h('div', { class: 'section-title', text: 'Check it works' }));
+      body.appendChild(h('div', { class: 'field__hint', style: 'margin-bottom:8px' }, [
+        'The scheduled test goes through exactly the same path as a real reminder, ' +
+        'so if it arrives with the app closed, real ones will too.'
+      ]));
+
+      body.appendChild(h('button', {
+        class: 'btn btn--ghost btn--block', type: 'button', style: 'margin-bottom:8px',
+        onclick: function () {
+          Notify.testNow().then(function () {
+            App.toast('Sent \u2014 check your notification shade');
+          }).catch(function (err) {
+            App.toast(err.message || 'Could not show a notification', 'warn');
+          });
+        }
+      }, ['Send a test notification now']));
+
+      body.appendChild(h('button', {
+        class: 'btn btn--primary btn--block', type: 'button',
+        onclick: function () {
+          Notify.testScheduled(60).then(function () {
+            App.toast('Scheduled for 60 seconds. Close the app and wait.');
+          }).catch(function (err) {
+            App.toast(err.message === 'no-triggers'
+              ? 'This browser cannot schedule ahead \u2014 see the note above'
+              : (err.message || 'Could not schedule'), 'warn');
+          });
+        }
+      }, ['Schedule a test for 60 seconds\u2019 time']));
+
+      var upcoming = Reminders.build(Store.get()).filter(function (e) {
+        return e.fireAt > Date.now();
+      });
+      body.appendChild(h('div', { class: 'section-title', text: 'Next reminders' }));
+      if (!upcoming.length) {
+        body.appendChild(h('div', {
+          class: 'field__hint',
+          text: 'Nothing queued. Reminders come from payment due dates, book-by dates and cancellation deadlines.'
+        }));
+      } else {
+        upcoming.slice(0, 6).forEach(function (e) {
+          var at = new Date(e.fireAt);
+          body.appendChild(h('div', { class: 'linkrow', style: 'cursor:default' }, [
+            h('span', {}, [
+              e.title,
+              h('small', {
+                text: at.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) +
+                  ' at ' + at.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) +
+                  ' \u00B7 ' + e.body
+              })
+            ])
+          ]));
+        });
+        if (upcoming.length > 6) {
+          body.appendChild(h('div', {
+            class: 'field__hint',
+            text: 'and ' + (upcoming.length - 6) + ' more.'
+          }));
+        }
+      }
+
+      body.appendChild(h('div', { class: 'section-title', text: 'Background worker' }));
+      var workerBox = h('div', { class: 'field__hint', text: 'Asking the worker\u2026' });
+      body.appendChild(workerBox);
+      Notify.workerPing().then(function (ping) {
+        if (!ping) {
+          workerBox.textContent = 'The offline worker did not answer. Reload the app once; ' +
+            'if it keeps quiet, background reminders will not run.';
+          return;
+        }
+        if (ping.error) {
+          workerBox.textContent = 'The worker reported a problem: ' + ping.error;
+          return;
+        }
+        workerBox.textContent = 'The worker is running, can read your bookings' +
+          (ping.stateVisible ? '' : ' (no data visible yet)') + ', and has ' +
+          ping.queued + ' reminder' + (ping.queued === 1 ? '' : 's') + ' to come. ' +
+          ping.alreadySent + ' already sent.';
+      });
+
+      body.appendChild(h('div', { class: 'section-title', text: 'Muting' }));
+      body.appendChild(h('div', { class: 'field__hint' }, [
+        'Open any booking to silence it, or mute a single instalment from its ' +
+        'payment screen. Muted things keep their dates, they just stop nagging.'
+      ]));
+    }
+
+    function patch(changes) {
+      var n = Store.settings().notifications ||
+        { enabled: false, leadDays: [7, 1], hour: 9 };
+      Object.keys(changes).forEach(function (k) { n[k] = changes[k]; });
+      Store.setSetting('notifications', n);
+      Notify.sync();
+    }
+
+    function setEnabled(on) {
+      patch({ enabled: on });
+      if (on) Notify.registerPeriodicSync();
+      else Notify.clearAll();
+    }
+  }
+
   function settingsSheet() {
     var entry = openSheet({
       title: 'Settings & backup',
@@ -1664,6 +1877,25 @@
           ]));
         });
       }
+
+      // ---- reminders
+      body.appendChild(h('div', { class: 'section-title', text: 'Reminders' }));
+      body.appendChild(h('button', {
+        class: 'linkrow', type: 'button',
+        onclick: function () { notificationsSheet(); }
+      }, [
+        h('span', {}, [
+          'Notifications',
+          h('small', {
+            text: Reminders.config(Store.get()).enabled
+              ? 'On \u00B7 ' + Reminders.config(Store.get()).leadDays.map(function (d) {
+                  return d === 0 ? 'on the day' : d + 'd';
+                }).join(', ') + ' before'
+              : 'Off'
+          })
+        ]),
+        h('em', { text: 'Set up' })
+      ]));
 
       // ---- display
       body.appendChild(h('div', { class: 'section-title', text: 'Display' }));
@@ -1762,8 +1994,18 @@
     var state = Store.get();
     if (!state.settings.seeded && !state.trips.length) Seed.load();
     Store.subscribe(render);
+    Store.subscribe(function () { Notify.sync(); });
     wire();
     render();
     registerSW();
+    Notify.sync();
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', function (event) {
+        var data = event.data || {};
+        if (data.type !== 'reminder-opened' || !data.data) return;
+        if (data.data.tripId) Store.setActiveTrip(data.data.tripId);
+      });
+    }
   });
 })(window);
