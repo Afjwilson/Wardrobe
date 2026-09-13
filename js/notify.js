@@ -264,6 +264,25 @@
 
   Notify.openDb = openDb;
 
+  /* Run exactly what Android runs when it wakes the worker. On a device
+     without exact scheduling this is the path real reminders take, so it is
+     the meaningful thing to test. */
+  Notify.runBackgroundCheck = function () {
+    return registration().then(function (reg) {
+      if (!reg || !reg.active) throw new Error('The offline worker is not running yet.');
+      return new Promise(function (resolve) {
+        var channel = new MessageChannel();
+        var done = false;
+        channel.port1.onmessage = function (event) {
+          done = true;
+          resolve((event.data || {}).raised || 0);
+        };
+        reg.active.postMessage({ type: 'check-reminders' }, [channel.port2]);
+        setTimeout(function () { if (!done) resolve(null); }, 5000);
+      });
+    });
+  };
+
   /* Ask the worker what it can see. Worth surfacing on the device itself,
      because the page and the worker can disagree about state. */
   Notify.workerPing = function () {

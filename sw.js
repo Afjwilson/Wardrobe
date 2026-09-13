@@ -1,5 +1,5 @@
 /* Offline shell and background reminders. Bump CACHE when the app files change. */
-var CACHE = 'holidays-v4';
+var CACHE = 'holidays-v5';
 
 importScripts('./js/reminders.js');
 
@@ -117,7 +117,7 @@ function runBackgroundCheck() {
 
     var now = Date.now();
     var due = self.Reminders.due(state, sent, now);
-    if (!due.length) return;
+    if (!due.length) return 0;
 
     return Promise.all(due.map(function (e) {
       sent[e.key] = now;
@@ -133,9 +133,11 @@ function runBackgroundCheck() {
       Object.keys(sent).forEach(function (k) {
         if (sent[k] < now - 90 * 24 * 60 * 60 * 1000) delete sent[k];
       });
-      return idbPut('holidays-notify', 'meta', 'sent', sent);
+      return idbPut('holidays-notify', 'meta', 'sent', sent).then(function () {
+        return due.length;
+      });
     });
-  }).catch(function () {});
+  }).catch(function () { return 0; });
 }
 
 self.addEventListener('periodicsync', function (event) {
@@ -150,7 +152,12 @@ self.addEventListener('message', function (event) {
   var msg = event.data || {};
 
   if (msg.type === 'check-reminders') {
-    event.waitUntil(runBackgroundCheck());
+    var port = event.ports && event.ports[0];
+    event.waitUntil(
+      runBackgroundCheck().then(function (raised) {
+        if (port) port.postMessage({ raised: raised || 0 });
+      })
+    );
     return;
   }
 

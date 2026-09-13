@@ -95,12 +95,22 @@ which one this device got:
    you set.
 3. **Neither** - reminders can only appear while the app is open.
 
-The two test buttons exist because of that spread. "Send a test notification
-now" proves permission and display. "Schedule a test for 60 seconds' time" goes
-through the same scheduling call a real reminder uses, so if it arrives with
-the app closed, real reminders will too - and if it refuses, this device does
-not have exact scheduling. A worker diagnostic below them reports what the
-service worker itself can see.
+The tests adapt to that spread. The first always proves permission and display.
+The second is whichever one means something on this device: where exact
+scheduling exists, a 60-second timed test through the real scheduling call;
+where it does not - which is most Android Chrome builds - a button that runs
+the background check by hand, the same routine Android runs when it wakes the
+worker. There is deliberately no timed test on the fallback path, because
+Android alone decides when that happens. A worker diagnostic below them reports
+what the service worker itself can see.
+
+**The dependable route is the calendar.** Because none of the three mechanisms
+can be promised, Settings also exports every deadline as an `.ics` file with
+alarms set at the same lead times, offered through the share sheet so Android
+hands it straight to a calendar app. Calendar apps have OS-level alarms that no
+web app can match. Entries carry stable UIDs, so re-exporting later updates them
+instead of duplicating. For a payment that would cost you the holiday, that is
+the one to use.
 
 Reminder-building lives in `js/reminders.js`, loaded by the page with a script
 tag and by `sw.js` with `importScripts`, so the background check and the

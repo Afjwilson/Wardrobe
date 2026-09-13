@@ -1719,10 +1719,6 @@
       body.appendChild(field(null, hourIn, 'Minutes are ignored \u2014 reminders land on the hour.'));
 
       body.appendChild(h('div', { class: 'section-title', text: 'Check it works' }));
-      body.appendChild(h('div', { class: 'field__hint', style: 'margin-bottom:8px' }, [
-        'The scheduled test goes through exactly the same path as a real reminder, ' +
-        'so if it arrives with the app closed, real ones will too.'
-      ]));
 
       body.appendChild(h('button', {
         class: 'btn btn--ghost btn--block', type: 'button', style: 'margin-bottom:8px',
@@ -1733,20 +1729,77 @@
             App.toast(err.message || 'Could not show a notification', 'warn');
           });
         }
-      }, ['Send a test notification now']));
+      }, ['1. Send a notification now']));
+      body.appendChild(h('div', {
+        class: 'field__hint', style: 'margin:-2px 0 14px',
+        text: 'Proves this phone will let the app show you anything at all.'
+      }));
 
+      /* Only offer the timed test where the browser can actually schedule
+         ahead. Elsewhere the honest equivalent is running the background
+         check by hand, since that is the path real reminders will take. */
+      if (Notify.hasTriggers()) {
+        body.appendChild(h('button', {
+          class: 'btn btn--primary btn--block', type: 'button',
+          onclick: function () {
+            Notify.testScheduled(60).then(function () {
+              App.toast('Scheduled for 60 seconds. Close the app and wait.');
+            }).catch(function (err) {
+              App.toast(err.message || 'Could not schedule', 'warn');
+            });
+          }
+        }, ['2. Schedule one for 60 seconds\u2019 time']));
+        body.appendChild(h('div', {
+          class: 'field__hint', style: 'margin-top:-2px',
+          text: 'Close the app and wait. This uses the same scheduling a real ' +
+            'reminder uses, so if it arrives, real ones will too.'
+        }));
+      } else {
+        body.appendChild(h('button', {
+          class: 'btn btn--primary btn--block', type: 'button',
+          onclick: function () {
+            Notify.runBackgroundCheck().then(function (raised) {
+              if (raised === null) {
+                App.toast('The worker did not answer. Reload the app and retry.', 'warn');
+              } else if (raised > 0) {
+                App.toast('Raised ' + raised + ' reminder' + (raised === 1 ? '' : 's') +
+                  ' \u2014 check your notification shade');
+              } else {
+                App.toast('Worker ran fine. Nothing is due right now, which is correct.');
+              }
+            }).catch(function (err) {
+              App.toast(err.message || 'Could not reach the worker', 'warn');
+            });
+          }
+        }, ['2. Run the background check now']));
+        body.appendChild(h('div', {
+          class: 'field__hint', style: 'margin-top:-2px',
+          text: 'This phone cannot schedule to the minute, so it uses a background ' +
+            'check instead. The button runs that check by hand \u2014 the same thing ' +
+            'Android runs when it wakes the app. A timed test is not possible here, ' +
+            'because Android decides when that happens.'
+        }));
+      }
+
+      // ---- the dependable route
+      body.appendChild(h('div', { class: 'section-title', text: 'Put them in your calendar' }));
+      body.appendChild(h('div', { class: 'callout callout--info' }, [
+        h('strong', { text: 'The reliable option' }),
+        'Your calendar has proper alarms that a web app cannot match. This saves ' +
+        'every deadline as a calendar file with the same reminders set on it \u2014 ' +
+        'open it and your calendar app will offer to import. Worth doing for the ' +
+        'dates you cannot afford to miss.'
+      ]));
       body.appendChild(h('button', {
-        class: 'btn btn--primary btn--block', type: 'button',
-        onclick: function () {
-          Notify.testScheduled(60).then(function () {
-            App.toast('Scheduled for 60 seconds. Close the app and wait.');
-          }).catch(function (err) {
-            App.toast(err.message === 'no-triggers'
-              ? 'This browser cannot schedule ahead \u2014 see the note above'
-              : (err.message || 'Could not schedule'), 'warn');
-          });
-        }
-      }, ['Schedule a test for 60 seconds\u2019 time']));
+        class: 'btn btn--ghost btn--block', type: 'button',
+        onclick: function () { exportCalendar(); }
+      }, ['Save the deadlines as a calendar file']));
+      body.appendChild(h('div', {
+        class: 'field__hint',
+        style: 'margin-top:6px',
+        text: Reminders.deadlines(Store.get()).length + ' dated things across all trips. ' +
+          'Re-saving later updates the same entries rather than duplicating them.'
+      }));
 
       var upcoming = Reminders.build(Store.get()).filter(function (e) {
         return e.fireAt > Date.now();
@@ -1803,6 +1856,37 @@
         'Open any booking to silence it, or mute a single instalment from its ' +
         'payment screen. Muted things keep their dates, they just stop nagging.'
       ]));
+    }
+
+    /* Share sheet first: on Android that puts the file straight into a calendar
+       app, whereas a download lands in Files and has to be found again. */
+    function exportCalendar() {
+      var built = Reminders.ics(Store.get());
+      if (!built.count) {
+        App.toast('No dated deadlines to export yet', 'warn');
+        return;
+      }
+
+      var name = 'holiday-deadlines.ics';
+      var type = 'text/calendar';
+      var file = null;
+      try { file = new File([built.text], name, { type: type }); } catch (e) { file = null; }
+
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({ files: [file], title: 'Holiday deadlines' }).then(function () {
+          App.toast('Shared \u2014 open it with your calendar app');
+        }).catch(function () {});
+        return;
+      }
+
+      var blob = new Blob([built.text], { type: type });
+      var url = URL.createObjectURL(blob);
+      var link = h('a', { href: url, download: name });
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+      App.toast('Saved ' + built.count + ' deadlines \u2014 open the file to import');
     }
 
     function patch(changes) {
