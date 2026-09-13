@@ -128,6 +128,25 @@
     return from + ' \u2013 ' + fmtShort(endDate) + (endTime ? ' ' + endTime : '');
   }
 
+  /* Successive monthly dates from a first payment, keeping the day of the
+     month and clamping where the month is too short (a 31st becomes the 30th
+     in November, the 28th in February). */
+  function monthlyDates(firstISO, count) {
+    var first = parseD(firstISO);
+    if (!first || !(count > 0)) return [];
+
+    var day = first.getDate();
+    var out = [];
+    for (var i = 0; i < count; i++) {
+      var m = first.getMonth() + i;
+      var year = first.getFullYear() + Math.floor(m / 12);
+      var month = ((m % 12) + 12) % 12;
+      var lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+      out.push(toISO(new Date(year, month, Math.min(day, lastDayOfMonth))));
+    }
+    return out;
+  }
+
   function nights(a, b) {
     var da = parseD(a), db = parseD(b);
     if (!da || !db) return 0;
@@ -655,6 +674,132 @@
 
   App.render = render;
 
+  // ---------------------------------------------- repeating payments builder
+  /* Instalment plans are the normal way package holidays get paid for, and
+     entering a year of them one row at a time is miserable. ctx supplies the
+     outstanding balance, the payments already recorded, and a callback that
+     receives the generated rows. */
+  function repeatPaymentsSheet(trip, ctx) {
+    var amountIn = numInput(null, '0.00');
+    var firstIn = dateInput('');
+    var countIn = h('input', { type: 'number', inputmode: 'numeric', min: '1', max: '60', value: '12' });
+    var labelIn = textInput('Instalment', { placeholder: 'Instalment' });
+
+    var unpaid = (ctx.payments || []).filter(function (p) { return !p.paidOn; });
+    var replaceSw = switchRow(
+      'Replace the ' + unpaid.length + ' unpaid payment' + (unpaid.length === 1 ? '' : 's') + ' already here',
+      false,
+      'Use this when a single balance is being swapped for a plan'
+    );
+
+    var preview = h('div', {});
+
+    function plan() {
+      var count = Math.max(0, Math.min(60, Number(countIn.value) || 0));
+      var amount = Number(amountIn.value) || 0;
+      var dates = monthlyDates(firstIn.value, count);
+      return { count: count, amount: amount, dates: dates, sum: amount * dates.length };
+    }
+
+    function drawPreview() {
+      preview.innerHTML = '';
+      var p = plan();
+
+      if (!p.dates.length || !p.amount) {
+        preview.appendChild(h('div', {
+          class: 'field__hint',
+          text: 'Fill in an amount, the first payment date and how many.'
+        }));
+        return;
+      }
+
+      var shown = p.dates.length > 4
+        ? [fmtShort(p.dates[0]), fmtShort(p.dates[1]), '\u2026',
+           fmtDeadline(p.dates[p.dates.length - 1])].join(', ')
+        : p.dates.map(fmtDeadline).join(', ');
+
+      preview.appendChild(h('div', { class: 'notes-block' }, [
+        h('div', {}, [h('strong', {
+          text: p.dates.length + ' \u00D7 ' + money(p.amount, trip.currency) +
+            ' = ' + money(p.sum, trip.currency)
+        })]),
+        h('div', { style: 'margin-top:4px', text: shown })
+      ]));
+
+      var diff = p.sum - ctx.outstanding;
+      if (ctx.outstanding > 0.005) {
+        if (Math.abs(diff) < 0.005) {
+          preview.appendChild(h('div', { class: 'callout callout--info', style: 'margin-top:10px' },
+            ['Matches the ' + money(ctx.outstanding, trip.currency) + ' outstanding exactly.']));
+        } else {
+          preview.appendChild(h('div', { class: 'callout callout--warn', style: 'margin-top:10px' }, [
+            h('strong', {
+              text: money(Math.abs(diff), trip.currency) + (diff > 0 ? ' more' : ' less') +
+                ' than the ' + money(ctx.outstanding, trip.currency) + ' outstanding'
+            }),
+            'Add them anyway if that is what the provider asked for \u2014 rounding on a ' +
+            'plan rarely lands exactly.'
+          ]));
+        }
+      }
+    }
+
+    [amountIn, firstIn, countIn].forEach(function (input) {
+      input.addEventListener('input', drawPreview);
+      input.addEventListener('change', drawPreview);
+    });
+
+    openSheet({
+      title: 'Repeating payments',
+      footer: [
+        h('button', { class: 'btn btn--ghost', type: 'button', onclick: closeSheet }, ['Cancel']),
+        h('button', {
+          class: 'btn btn--primary', type: 'button',
+          onclick: function () {
+            var p = plan();
+            if (!p.dates.length || !p.amount) {
+              App.toast('Needs an amount, a first date and a count', 'warn');
+              return;
+            }
+            var prefix = labelIn.value.trim() || 'Instalment';
+            var rows = p.dates.map(function (date, i) {
+              return {
+                id: Store.uid(),
+                label: prefix + ' ' + (i + 1) + '/' + p.dates.length,
+                amount: Number(p.amount.toFixed(2)),
+                dueOn: date,
+                paidOn: null
+              };
+            });
+            ctx.onAdd(rows, replaceSw.input.checked);
+            closeSheet();
+            App.toast('Added ' + rows.length + ' payments');
+          }
+        }, ['Add payments'])
+      ],
+      render: function (body) {
+        body.appendChild(h('div', { class: 'field__hint', style: 'margin-bottom:12px' }, [
+          'Builds a monthly run of payments in one go \u2014 each one still ticks off ' +
+          'individually as you pay it.'
+        ]));
+
+        body.appendChild(h('div', { class: 'grid' }, [
+          field('Amount each (' + trip.currency + ')', amountIn),
+          field('How many', countIn)
+        ]));
+        body.appendChild(field('First payment', firstIn,
+          'Every later one falls on the same day of the month.'));
+        body.appendChild(field('Label', labelIn));
+
+        if (unpaid.length) body.appendChild(replaceSw);
+
+        body.appendChild(h('div', { class: 'section-title', text: 'Preview' }));
+        body.appendChild(preview);
+        drawPreview();
+      }
+    });
+  }
+
   // -------------------------------------------------------- payment sheet
   function paymentSheet(trip, item) {
     openSheet({
@@ -790,6 +935,24 @@
         redraw();
       }
     }, ['+ Add a scheduled payment']));
+
+    actions.appendChild(h('button', {
+      class: 'btn btn--ghost btn--block', type: 'button',
+      onclick: function () {
+        repeatPaymentsSheet(trip, {
+          outstanding: due,
+          payments: item.payments,
+          onAdd: function (rows, replace) {
+            var kept = replace
+              ? (item.payments || []).filter(function (p) { return p.paidOn; })
+              : (item.payments || []);
+            item.payments = kept.concat(rows);
+            Store.save();
+            redraw();
+          }
+        });
+      }
+    }, ['+ Add repeating payments\u2026']));
 
     actions.appendChild(h('button', {
       class: 'btn btn--ghost btn--block', type: 'button',
@@ -979,6 +1142,28 @@
           refreshSheet(entry, drawEditor);
         }
       }, ['+ Add a payment']));
+
+      body.appendChild(h('button', {
+        class: 'btn btn--ghost btn--sm btn--block', type: 'button',
+        style: 'margin-top:8px',
+        onclick: function () {
+          harvest();
+          var scheduled = (draft.payments || []).reduce(function (sum, p) {
+            return p.paidOn ? sum + (Number(p.amount) || 0) : sum;
+          }, 0);
+          repeatPaymentsSheet(trip, {
+            outstanding: Math.max(0, (Number(draft.total) || 0) - scheduled),
+            payments: draft.payments,
+            onAdd: function (rows, replace) {
+              var kept = replace
+                ? (draft.payments || []).filter(function (p) { return p.paidOn; })
+                : (draft.payments || []);
+              draft.payments = kept.concat(rows);
+              refreshSheet(entry, drawEditor);
+            }
+          });
+        }
+      }, ['+ Add repeating payments\u2026']));
 
       // ---- legs
       if (cat.legs) {

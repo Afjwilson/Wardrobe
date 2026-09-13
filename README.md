@@ -53,7 +53,9 @@ nearer trip has even been paid for, so it defaults to showing all trips at once.
 what it cost, which card paid for it, a free-cancellation deadline, and any
 number of scheduled payments with their own due dates. Dates can carry clock
 times as well, so airport parking reads "16 Nov 06:30 - 20 Nov 18:00" rather
-than just the days. Flights, trains and transfers also take any number of legs,
+than just the days. An instalment plan goes in as one operation: *Add repeating
+payments* takes an amount, a first date and a count, and lays out the whole
+monthly run, clamping the day where a month is too short. Flights, trains and transfers also take any number of legs,
 each with a flight number, airports, times and an arrives-next-day flag.
 
 Prices can be held in two currencies at once — the local price (€607) alongside

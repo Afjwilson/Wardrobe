@@ -1,5 +1,5 @@
 /* Offline shell. Bump CACHE when the app files change. */
-var CACHE = 'holidays-v2';
+var CACHE = 'holidays-v3';
 
 var SHELL = [
   './',
