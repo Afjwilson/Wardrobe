@@ -1740,7 +1740,7 @@
          check by hand, since that is the path real reminders will take. */
       if (Notify.hasTriggers()) {
         body.appendChild(h('button', {
-          class: 'btn btn--primary btn--block', type: 'button',
+          class: 'btn btn--ghost btn--block', type: 'button',
           onclick: function () {
             Notify.testScheduled(60).then(function () {
               App.toast('Scheduled for 60 seconds. Close the app and wait.');
@@ -1756,7 +1756,7 @@
         }));
       } else {
         body.appendChild(h('button', {
-          class: 'btn btn--primary btn--block', type: 'button',
+          class: 'btn btn--ghost btn--block', type: 'button',
           onclick: function () {
             Notify.runBackgroundCheck().then(function (raised) {
               if (raised === null) {
@@ -1791,7 +1791,7 @@
         'dates you cannot afford to miss.'
       ]));
       body.appendChild(h('button', {
-        class: 'btn btn--ghost btn--block', type: 'button',
+        class: 'btn btn--primary btn--block', type: 'button',
         onclick: function () { exportCalendar(); }
       }, ['Save the deadlines as a calendar file']));
       body.appendChild(h('div', {
@@ -1858,8 +1858,10 @@
       ]));
     }
 
-    /* Share sheet first: on Android that puts the file straight into a calendar
-       app, whereas a download lands in Files and has to be found again. */
+    /* Share sheet first, because on Android that hands the file straight to a
+       calendar app, where a download lands in Files and has to be hunted down.
+       Every route reports what happened: a button that silently does nothing
+       is indistinguishable from a broken one. */
     function exportCalendar() {
       var built = Reminders.ics(Store.get());
       if (!built.count) {
@@ -1869,24 +1871,77 @@
 
       var name = 'holiday-deadlines.ics';
       var type = 'text/calendar';
+
+      function download() {
+        try {
+          var blob = new Blob([built.text], { type: type });
+          var url = URL.createObjectURL(blob);
+          var link = h('a', { href: url, download: name });
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(function () { URL.revokeObjectURL(url); }, 8000);
+          App.toast('Saved to your downloads as ' + name +
+            ' \u2014 open that file to import it');
+        } catch (e) {
+          showText();
+        }
+      }
+
+      /* Last resort when neither sharing nor downloading is allowed: put the
+         file on screen so it can at least be copied out by hand. */
+      function showText() {
+        openSheet({
+          title: 'Calendar file',
+          footer: [
+            h('button', {
+              class: 'btn btn--primary', type: 'button',
+              onclick: function () {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                  navigator.clipboard.writeText(built.text).then(function () {
+                    App.toast('Copied \u2014 paste into a file named ' + name);
+                  }).catch(function () {
+                    App.toast('Could not copy. Select the text by hand.', 'warn');
+                  });
+                } else {
+                  App.toast('Select the text and copy it by hand', 'warn');
+                }
+              }
+            }, ['Copy it'])
+          ],
+          render: function (body) {
+            body.appendChild(h('div', { class: 'callout callout--warn' }, [
+              h('strong', { text: 'This phone blocked both sharing and downloading' }),
+              'Copy the text below, save it as a file called ' + name + ', and open ' +
+              'that file with your calendar app.'
+            ]));
+            body.appendChild(h('div', {
+              class: 'notes-block',
+              style: 'max-height:40vh;overflow:auto;font-size:11px;line-height:1.4',
+              text: built.text
+            }));
+          }
+        });
+      }
+
       var file = null;
       try { file = new File([built.text], name, { type: type }); } catch (e) { file = null; }
 
       if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
         navigator.share({ files: [file], title: 'Holiday deadlines' }).then(function () {
-          App.toast('Shared \u2014 open it with your calendar app');
-        }).catch(function () {});
+          App.toast('Shared \u2014 pick your calendar app to import it');
+        }).catch(function (err) {
+          // Dismissing the share sheet is a choice, not a failure.
+          if (err && err.name === 'AbortError') {
+            App.toast('Cancelled \u2014 nothing was saved');
+            return;
+          }
+          download();
+        });
         return;
       }
 
-      var blob = new Blob([built.text], { type: type });
-      var url = URL.createObjectURL(blob);
-      var link = h('a', { href: url, download: name });
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
-      App.toast('Saved ' + built.count + ' deadlines \u2014 open the file to import');
+      download();
     }
 
     function patch(changes) {
