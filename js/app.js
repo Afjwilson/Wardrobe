@@ -170,7 +170,7 @@
     t.className = 'toast' + (kind === 'warn' ? ' toast--warn' : '');
     t.hidden = false;
     clearTimeout(t._timer);
-    t._timer = setTimeout(function () { t.hidden = true; }, kind === 'warn' ? 5200 : 2600);
+    t._timer = setTimeout(function () { t.hidden = true; }, kind === 'warn' ? 5200 : 4000);
   };
 
   // ---------------------------------------------------------------- sheets
@@ -1873,19 +1873,63 @@
       var type = 'text/calendar';
 
       function download() {
+        var url;
         try {
           var blob = new Blob([built.text], { type: type });
-          var url = URL.createObjectURL(blob);
+          url = URL.createObjectURL(blob);
           var link = h('a', { href: url, download: name });
           document.body.appendChild(link);
           link.click();
           link.remove();
-          setTimeout(function () { URL.revokeObjectURL(url); }, 8000);
-          App.toast('Saved to your downloads as ' + name +
-            ' \u2014 open that file to import it');
         } catch (e) {
           showText();
+          return;
         }
+        showSaved(url);
+      }
+
+      /* A toast is no help here: the next step is to go and find the file, and
+         the message is gone before you have started looking. This stays until
+         dismissed and keeps a real link to tap, which Android hands to a
+         calendar app far more readily than a download tucked away in Files. */
+      function showSaved(url) {
+        openSheet({
+          title: 'Calendar file saved',
+          onClose: function () {
+            setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+          },
+          footer: [
+            h('button', { class: 'btn btn--ghost', type: 'button', onclick: closeSheet }, ['Done'])
+          ],
+          render: function (body) {
+            body.appendChild(h('div', { class: 'callout callout--info' }, [
+              h('strong', { text: 'Saved as ' + name }),
+              built.count + ' deadlines, in your Downloads folder.'
+            ]));
+
+            body.appendChild(h('a', {
+              class: 'btn btn--primary btn--block',
+              href: url,
+              download: name,
+              type: type
+            }, ['Open it now']));
+
+            body.appendChild(h('div', {
+              class: 'field__hint',
+              style: 'margin-top:10px',
+              text: 'Your calendar app should offer to import it. If tapping that ' +
+                'does nothing, open your Downloads folder and tap ' + name + ' there ' +
+                '\u2014 same result.'
+            }));
+
+            body.appendChild(h('div', { class: 'section-title', text: 'Once imported' }));
+            body.appendChild(h('div', { class: 'field__hint' }, [
+              'The deadlines appear in your calendar with reminders already set. ' +
+              'Come back and save again after adding bookings \u2014 it updates the ' +
+              'same entries rather than creating duplicates.'
+            ]));
+          }
+        });
       }
 
       /* Last resort when neither sharing nor downloading is allowed: put the

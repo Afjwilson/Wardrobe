@@ -493,6 +493,7 @@ main {
   font-weight: 600;
   cursor: pointer;
 }
+.btn { text-decoration: none; }
 .btn:active { transform: translateY(1px); }
 .btn--primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .btn--ghost { background: var(--card); }
