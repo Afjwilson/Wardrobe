@@ -420,7 +420,10 @@
 
     box.innerHTML = '';
     box.appendChild(h('div', { class: 'summary__top' }, [
-      h('div', {}, [
+      h('div', { style: 'min-width:0' }, [
+        // Naming the trip here stops these figures being read as a total across
+        // every trip, which the panel below can be showing at the same time.
+        h('div', { class: 'summary__scope', text: trip.name }),
         h('div', { class: 'summary__label', text: t.due > 0.005 ? 'Left to pay' : 'All paid' }),
         h('div', { class: 'summary__big', text: money0(t.due, trip.currency) })
       ]),
@@ -432,13 +435,33 @@
 
     box.appendChild(h('div', { class: 'bar' }, [h('i', { style: 'width:' + pct + '%' })]));
 
+    /* Tapping a count shows the things it counted. It also pulls the deadline
+       panel onto this trip, so every number on screen describes one trip at
+       once rather than two different scopes. */
+    function statTile(kind, filter, count, label) {
+      var active = ui.filter === filter;
+      return h('button', {
+        class: 'stat stat--' + kind + (active ? ' stat--active' : ''),
+        type: 'button',
+        'aria-pressed': String(active),
+        onclick: function () {
+          ui.filter = active ? 'all' : filter;
+          ui.category = null;
+          if (!active) ui.attentionScope = 'trip';
+          render();
+          if (!active) {
+            var list = $('#list');
+            if (list && list.scrollIntoView) {
+              list.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }
+        }
+      }, [h('b', { text: String(count) }), h('span', { text: label })]);
+    }
+
     box.appendChild(h('div', { class: 'summary__stats' }, [
-      h('div', { class: 'stat stat--todo' }, [
-        h('b', { text: String(t.toBook) }), h('span', { text: 'left to book' })
-      ]),
-      h('div', { class: 'stat stat--pay' }, [
-        h('b', { text: String(t.toPay) }), h('span', { text: 'payments due' })
-      ]),
+      statTile('todo', 'tobook', t.toBook, 'left to book'),
+      statTile('pay', 'topay', t.toPay, 'payments due'),
       h('div', { class: 'stat stat--done' }, [
         h('b', { text: (away !== null && away >= 0) ? String(away) : '–' }),
         h('span', { text: away !== null && away >= 0 ? 'days to go' : 'departed' })
@@ -489,7 +512,11 @@
 
     var all = collectDue(trip);
     var head = h('div', { class: 'attention__head' }, [
-      h('h2', { text: 'Needs attention' }),
+      h('h2', {
+        text: ui.attentionScope === 'all'
+          ? 'Needs attention · every trip'
+          : 'Needs attention · this trip'
+      }),
       h('div', { class: 'mini-toggle' }, [
         h('button', {
           type: 'button', 'aria-pressed': String(ui.attentionScope === 'all'),
@@ -593,6 +620,24 @@
     box.innerHTML = '';
 
     var items = visibleItems(trip);
+
+    /* Say out loud what the list has been narrowed to, and offer the way out. */
+    if (ui.filter !== 'all' || ui.category) {
+      var what = { tobook: 'still to book', topay: 'awaiting payment', done: 'sorted' }[ui.filter];
+      var caption = items.length + ' ' +
+        (what || 'item' + (items.length === 1 ? '' : 's')) +
+        (ui.category ? ' in ' + Catalog.category(ui.category).label.toLowerCase() : '') +
+        ' · ' + trip.name;
+
+      box.appendChild(h('div', { class: 'attention__head', style: 'padding-top:2px' }, [
+        h('h2', { text: caption }),
+        h('button', {
+          class: 'chip', type: 'button',
+          onclick: function () { ui.filter = 'all'; ui.category = null; render(); }
+        }, ['Show everything'])
+      ]));
+    }
+
     if (!items.length) {
       box.appendChild(h('div', { class: 'rows' }, [
         h('div', {
