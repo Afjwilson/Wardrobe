@@ -221,6 +221,13 @@
     var hour = opts.hour == null ? cfg.hour : opts.hour;
     var stamp = icsStamp(new Date());
 
+    /* Bumped on every export so calendar apps treat a re-import as an update
+       to the entry rather than something to ignore or duplicate. */
+    var sequence = Math.floor(Date.now() / 60000);
+    var used = {};
+    var skipped = [];
+    var written = 0;
+
     var lines = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
@@ -235,7 +242,20 @@
     list.forEach(function (d) {
       var start = icsDate(d.dueOn, 0);
       var end = icsDate(d.dueOn, 1);
-      if (!start) return;
+      if (!start) {
+        skipped.push({ title: d.item.title, reason: 'no usable date', dueOn: d.dueOn });
+        return;
+      }
+
+      /* Calendar apps key entries by UID and quietly drop repeats, so a
+         collision would lose a booking without saying anything. */
+      var uid = d.kind + '-' + d.id;
+      if (used[uid]) {
+        var n = 2;
+        while (used[uid + '-' + n]) n++;
+        uid = uid + '-' + n;
+      }
+      used[uid] = true;
 
       var summary = d.kind === 'pay'
         ? d.trip.name + ': ' + money(d.amount, d.trip.currency) + ' due'
@@ -249,8 +269,10 @@
       if (d.item.ref) detail.push('Reference ' + d.item.ref);
 
       lines.push('BEGIN:VEVENT');
-      lines.push('UID:' + d.kind + '-' + d.id + '@holiday-tracker');
+      lines.push('UID:' + uid + '@holiday-tracker');
       lines.push('DTSTAMP:' + stamp);
+      lines.push('LAST-MODIFIED:' + stamp);
+      lines.push('SEQUENCE:' + sequence);
       lines.push('DTSTART;VALUE=DATE:' + start);
       lines.push('DTEND;VALUE=DATE:' + end);
       lines.push('SUMMARY:' + icsEscape(summary));
@@ -266,13 +288,18 @@
       });
 
       lines.push('END:VEVENT');
+      written++;
     });
 
     lines.push('END:VCALENDAR');
 
+    /* count is what the file actually contains, not what was hoped for: the
+       two diverging is how a missing booking goes unnoticed. */
     return {
       text: lines.map(icsFold).join('\r\n') + '\r\n',
-      count: list.length
+      count: written,
+      deadlines: list.length,
+      skipped: skipped
     };
   }
 

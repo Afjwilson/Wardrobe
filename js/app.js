@@ -1914,7 +1914,14 @@
         return;
       }
 
-      var name = 'holiday-deadlines.ics';
+      /* A fresh name each time. Reusing one made Chrome ask whether to download
+         it again, which reads like an error and gave no way to tell the newest
+         file from one saved ten minutes earlier. Calendar apps match on the
+         entries inside, not the filename, so re-importing still updates. */
+      var now = new Date();
+      var name = 'holiday-deadlines-' + toISO(now) + '-' +
+        String(now.getHours()).padStart(2, '0') +
+        String(now.getMinutes()).padStart(2, '0') + '.ics';
       var type = 'text/calendar';
 
       function download() {
@@ -1948,30 +1955,42 @@
           ],
           render: function (body) {
             body.appendChild(h('div', { class: 'callout callout--info' }, [
-              h('strong', { text: 'Saved as ' + name }),
-              built.count + ' deadlines, in your Downloads folder.'
+              h('strong', { text: built.count + ' deadlines saved' }),
+              'The file is called ' + name + ' and is in your Downloads folder.'
             ]));
 
+            /* Anything that could not be written is named here rather than
+               leaving a gap between the count and what the calendar receives. */
+            if (built.skipped && built.skipped.length) {
+              body.appendChild(h('div', { class: 'callout callout--warn' }, [
+                h('strong', { text: built.skipped.length + ' could not be included' }),
+                built.skipped.map(function (x) {
+                  return x.title + ' (' + x.reason + ')';
+                }).join(', ') + '. Give them a date and save again.'
+              ]));
+            }
+
+            body.appendChild(h('div', { class: 'section-title', text: 'Now import it' }));
+            body.appendChild(h('div', { class: 'notes-block' }, [
+              'Tap the download notification that just appeared, or open your ' +
+              'Downloads and tap ' + name + '. Your calendar app will then offer ' +
+              'to add the ' + built.count + ' entries, reminders already set.'
+            ]));
+
+            // Honest label: the browser saves another copy, it cannot open one.
             body.appendChild(h('a', {
-              class: 'btn btn--primary btn--block',
+              class: 'btn btn--ghost btn--block',
+              style: 'margin-top:12px',
               href: url,
               download: name,
               type: type
-            }, ['Open it now']));
+            }, ['Save another copy']));
 
-            body.appendChild(h('div', {
-              class: 'field__hint',
-              style: 'margin-top:10px',
-              text: 'Your calendar app should offer to import it. If tapping that ' +
-                'does nothing, open your Downloads folder and tap ' + name + ' there ' +
-                '\u2014 same result.'
-            }));
-
-            body.appendChild(h('div', { class: 'section-title', text: 'Once imported' }));
+            body.appendChild(h('div', { class: 'section-title', text: 'Adding bookings later' }));
             body.appendChild(h('div', { class: 'field__hint' }, [
-              'The deadlines appear in your calendar with reminders already set. ' +
-              'Come back and save again after adding bookings \u2014 it updates the ' +
-              'same entries rather than creating duplicates.'
+              'Save again whenever you add something. Each entry keeps the same ' +
+              'identity, so your calendar updates what is already there rather ' +
+              'than doubling it up.'
             ]));
           }
         });

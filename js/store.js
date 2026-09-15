@@ -417,10 +417,17 @@
       incoming = migrate(incoming);
       if (!incoming) throw new Error('That file does not look like a holiday tracker backup.');
       if (mode === 'merge') {
-        var existing = {};
-        state.trips.forEach(function (t) { existing[t.id] = t; });
+        /* Merging a backup that overlaps what is already here used to keep the
+           incoming ids, so two separate bookings ended up sharing one id. That
+           is invisible in the app but collapses them into one entry in an
+           exported calendar, so everything gets a fresh identity. */
         incoming.trips.forEach(function (t) {
-          if (existing[t.id]) t.id = uid();
+          t.id = uid();
+          (t.items || []).forEach(function (item) {
+            item.id = uid();
+            (item.payments || []).forEach(function (p) { p.id = uid(); });
+            (item.legs || []).forEach(function (l) { l.id = uid(); });
+          });
           state.trips.push(t);
         });
       } else {
