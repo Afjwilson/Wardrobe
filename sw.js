@@ -1,5 +1,5 @@
 /* Offline shell and background reminders. Bump CACHE when the app files change. */
-var CACHE = 'holidays-v9';
+var CACHE = 'holidays-v10';
 
 importScripts('./js/reminders.js');
 

@@ -1908,8 +1908,18 @@
        Every route reports what happened: a button that silently does nothing
        is indistinguishable from a broken one. */
     function exportCalendar() {
-      var built = Reminders.ics(Store.get());
-      if (!built.count) {
+      /* What earlier exports put in the calendar, so entries whose booking has
+         since been deleted can be withdrawn rather than stranded there. */
+      var sent = Store.settings().calendarSent || {};
+      var built = Reminders.ics(Store.get(), { sent: sent });
+
+      var stored = built.sent;
+      Object.keys(stored).forEach(function (uid) {
+        if (!stored[uid].since) stored[uid].since = Date.now();
+      });
+      Store.setSetting('calendarSent', stored);
+
+      if (!built.count && !built.finished && !built.withdrawn) {
         App.toast('No dated deadlines to export yet', 'warn');
         return;
       }
@@ -1958,6 +1968,22 @@
               h('strong', { text: built.count + ' deadlines saved' }),
               'The file is called ' + name + ' and is in your Downloads folder.'
             ]));
+
+            /* Finished and deleted entries ride along as cancellations, which
+               is the only way an import can clear them out. */
+            var clears = built.finished + built.withdrawn;
+            if (clears) {
+              body.appendChild(h('div', { class: 'callout callout--info' }, [
+                h('strong', {
+                  text: clears + ' finished ' + (clears === 1 ? 'entry' : 'entries') +
+                    ' will be cleared'
+                }),
+                'Things you have since booked, paid or deleted are in the file as ' +
+                'cancellations, so importing takes them back out of your calendar. ' +
+                'If your calendar leaves them, they will at least be relabelled and ' +
+                'stop reminding you.'
+              ]));
+            }
 
             /* Anything that could not be written is named here rather than
                leaving a gap between the count and what the calendar receives. */

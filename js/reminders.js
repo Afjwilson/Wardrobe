@@ -71,42 +71,59 @@
     }, 0);
   }
 
-  /* Every dated thing still wanting attention. Muted bookings and muted or
-     already-paid instalments never appear. */
-  function deadlines(state) {
+  /* Every dated thing, including the ones already dealt with, each flagged.
+     Reminders only want the outstanding ones, but a calendar needs to be told
+     when something is finished: an entry that merely stops appearing in an
+     export leaves the old one sitting in the calendar looking actionable. */
+  function allDeadlines(state) {
     var out = [];
 
     (state.trips || []).forEach(function (trip) {
       (trip.items || []).forEach(function (item) {
-        if (item.muted) return;
+        var muted = !!item.muted;
 
-        if (!item.booked && item.bookBy) {
-          out.push({
-            kind: 'book', id: item.id, dueOn: item.bookBy,
-            label: 'Still to book', trip: trip, item: item
+        function add(d) {
+          d.trip = trip;
+          d.item = item;
+          if (muted && !d.done) { d.done = true; d.doneReason = 'muted'; }
+          out.push(d);
+        }
+
+        if (item.bookBy) {
+          add({
+            kind: 'book', id: item.id, dueOn: item.bookBy, label: 'Still to book',
+            done: !!item.booked, doneReason: item.booked ? 'booked' : ''
           });
         }
 
         (item.payments || []).forEach(function (p) {
-          if (p.paidOn || p.muted || !p.dueOn) return;
-          out.push({
+          if (!p.dueOn) return;
+          add({
             kind: 'pay', id: item.id + ':' + p.id, dueOn: p.dueOn,
-            amount: p.amount, label: p.label || 'Payment', trip: trip, item: item
+            amount: p.amount, label: p.label || 'Payment',
+            done: !!p.paidOn || !!p.muted,
+            doneReason: p.paidOn ? 'paid' : (p.muted ? 'muted' : '')
           });
         });
 
         var total = item.included ? 0 : (Number(item.total) || 0);
         var settled = total > 0 && paidTotal(item) + 0.005 >= total;
-        if (item.cancelBy && !settled) {
-          out.push({
+        if (item.cancelBy) {
+          add({
             kind: 'cancel', id: item.id, dueOn: item.cancelBy,
-            label: 'Free cancellation ends', trip: trip, item: item
+            label: 'Free cancellation ends',
+            done: settled, doneReason: settled ? 'paid' : ''
           });
         }
       });
     });
 
     return out;
+  }
+
+  /* Every dated thing still wanting attention. */
+  function deadlines(state) {
+    return allDeadlines(state).filter(function (d) { return !d.done; });
   }
 
   function headline(d, when) {
@@ -213,20 +230,33 @@
 
   /* A calendar file of every deadline, each with alarms at the same lead times
      the in-app reminders use. Calendar apps have OS-level scheduling that a web
-     app cannot match, so this is the dependable route for dates that matter. */
+     app cannot match, so this is the dependable route for dates that matter.
+
+     Finished and deleted entries are written too, as cancellations. Leaving one
+     out of the file does not remove it from a calendar: it just stops being
+     mentioned, and the old entry stays there looking like it still needs doing.
+
+     `sent` is the map of what previous exports put in the calendar, so entries
+     whose booking has since been deleted can still be withdrawn. The caller
+     stores the map that comes back. */
   function ics(state, opts) {
     opts = opts || {};
     var cfg = config(state);
     var leads = opts.leadDays || cfg.leadDays;
     var hour = opts.hour == null ? cfg.hour : opts.hour;
-    var stamp = icsStamp(new Date());
+    var now = opts.now || Date.now();
+    var stamp = icsStamp(new Date(now));
+    var sent = opts.sent || {};
 
     /* Bumped on every export so calendar apps treat a re-import as an update
        to the entry rather than something to ignore or duplicate. */
-    var sequence = Math.floor(Date.now() / 60000);
+    var sequence = Math.floor(now / 60000);
     var used = {};
     var skipped = [];
-    var written = 0;
+    var live = 0;
+    var finished = 0;
+    var withdrawn = 0;
+    var nextSent = {};
 
     var lines = [
       'BEGIN:VCALENDAR',
@@ -237,9 +267,44 @@
       'X-WR-CALNAME:Holiday deadlines'
     ];
 
-    var list = deadlines(state);
+    function uniqueUid(base) {
+      /* Calendar apps key entries by UID and quietly drop repeats, so a
+         collision would lose a booking without saying anything. */
+      var uid = base;
+      if (used[uid]) {
+        var n = 2;
+        while (used[uid + '-' + n]) n++;
+        uid = uid + '-' + n;
+      }
+      used[uid] = true;
+      return uid;
+    }
 
-    list.forEach(function (d) {
+    function event(o) {
+      lines.push('BEGIN:VEVENT');
+      lines.push('UID:' + o.uid + '@holiday-tracker');
+      lines.push('DTSTAMP:' + stamp);
+      lines.push('LAST-MODIFIED:' + stamp);
+      lines.push('SEQUENCE:' + sequence);
+      lines.push('DTSTART;VALUE=DATE:' + o.start);
+      lines.push('DTEND;VALUE=DATE:' + o.end);
+      lines.push('SUMMARY:' + icsEscape(o.summary));
+      if (o.description) lines.push('DESCRIPTION:' + icsEscape(o.description));
+      lines.push('TRANSP:TRANSPARENT');
+      lines.push('STATUS:' + (o.cancelled ? 'CANCELLED' : 'CONFIRMED'));
+      (o.alarms || []).forEach(function (a) {
+        lines.push('BEGIN:VALARM');
+        lines.push('ACTION:DISPLAY');
+        lines.push('DESCRIPTION:' + icsEscape(a.text));
+        lines.push('TRIGGER:' + a.trigger);
+        lines.push('END:VALARM');
+      });
+      lines.push('END:VEVENT');
+    }
+
+    var all = allDeadlines(state);
+
+    all.forEach(function (d) {
       var start = icsDate(d.dueOn, 0);
       var end = icsDate(d.dueOn, 1);
       if (!start) {
@@ -247,15 +312,8 @@
         return;
       }
 
-      /* Calendar apps key entries by UID and quietly drop repeats, so a
-         collision would lose a booking without saying anything. */
-      var uid = d.kind + '-' + d.id;
-      if (used[uid]) {
-        var n = 2;
-        while (used[uid + '-' + n]) n++;
-        uid = uid + '-' + n;
-      }
-      used[uid] = true;
+      var uid = uniqueUid(d.kind + '-' + d.id);
+      nextSent[uid] = { on: d.dueOn };
 
       var summary = d.kind === 'pay'
         ? d.trip.name + ': ' + money(d.amount, d.trip.currency) + ' due'
@@ -268,27 +326,52 @@
       if (d.item.payWith) detail.push('Pay with ' + d.item.payWith);
       if (d.item.ref) detail.push('Reference ' + d.item.ref);
 
-      lines.push('BEGIN:VEVENT');
-      lines.push('UID:' + uid + '@holiday-tracker');
-      lines.push('DTSTAMP:' + stamp);
-      lines.push('LAST-MODIFIED:' + stamp);
-      lines.push('SEQUENCE:' + sequence);
-      lines.push('DTSTART;VALUE=DATE:' + start);
-      lines.push('DTEND;VALUE=DATE:' + end);
-      lines.push('SUMMARY:' + icsEscape(summary));
-      lines.push('DESCRIPTION:' + icsEscape(detail.join('\n')));
-      lines.push('TRANSP:TRANSPARENT');
+      if (d.done) {
+        /* Cancelled so calendars that honour it drop the entry, and relabelled
+           with no alarm so the ones that do not at least stop nagging. */
+        finished++;
+        var was = d.doneReason === 'paid' ? 'Paid'
+          : (d.doneReason === 'booked' ? 'Booked' : 'Muted');
+        event({
+          uid: uid, start: start, end: end, cancelled: true,
+          summary: was + ' \u2014 ' + summary,
+          description: was + '. ' + detail.join('. ')
+        });
+        return;
+      }
 
-      leads.forEach(function (lead) {
-        lines.push('BEGIN:VALARM');
-        lines.push('ACTION:DISPLAY');
-        lines.push('DESCRIPTION:' + icsEscape(headline(d, whenPhrase(lead))));
-        lines.push('TRIGGER:' + icsTrigger(lead, hour));
-        lines.push('END:VALARM');
+      live++;
+      event({
+        uid: uid, start: start, end: end, cancelled: false,
+        summary: summary,
+        description: detail.join('\n'),
+        alarms: leads.map(function (lead) {
+          return { text: headline(d, whenPhrase(lead)), trigger: icsTrigger(lead, hour) };
+        })
       });
+    });
 
-      lines.push('END:VEVENT');
-      written++;
+    /* Anything a previous export put in the calendar that no longer exists at
+       all - the booking was deleted - is withdrawn by name. Kept on the list
+       for a while in case a file gets saved but never imported. */
+    Object.keys(sent).forEach(function (uid) {
+      if (nextSent[uid]) return;
+      var record = sent[uid] || {};
+      var start = icsDate(record.on, 0);
+      var end = icsDate(record.on, 1);
+      if (!start) return;
+
+      var since = record.since || now;
+      if (now - since > 45 * 86400000) return;
+
+      nextSent[uid] = { on: record.on, since: since };
+      withdrawn++;
+      used[uid] = true;
+      event({
+        uid: uid, start: start, end: end, cancelled: true,
+        summary: 'Removed \u2014 no longer in the holiday tracker',
+        description: 'This booking was deleted from the tracker.'
+      });
     });
 
     lines.push('END:VCALENDAR');
@@ -297,9 +380,12 @@
        two diverging is how a missing booking goes unnoticed. */
     return {
       text: lines.map(icsFold).join('\r\n') + '\r\n',
-      count: written,
-      deadlines: list.length,
-      skipped: skipped
+      count: live,
+      finished: finished,
+      withdrawn: withdrawn,
+      deadlines: all.length,
+      skipped: skipped,
+      sent: nextSent
     };
   }
 
@@ -308,6 +394,7 @@
     TAG_PREFIX: TAG_PREFIX,
     config: config,
     deadlines: deadlines,
+    allDeadlines: allDeadlines,
     build: build,
     due: due,
     ics: ics,
